@@ -6,6 +6,7 @@ from operator import attrgetter
 from typing import List
 
 import bitlyshortener
+import discord
 import feedparser
 from discord.ext import commands, tasks
 from feedparser.util import FeedParserDict
@@ -98,10 +99,13 @@ class RssCheckCog(commands.Cog):
             shorten_urls_dict = self.shortener.shorten_urls_to_dict(
                 new_item_links)
             channel = self.bot.get_channel(checker.send_channel_id)
+            embed = discord.Embed(title=checker.name)
             for i in new_items:
-                msg = checker.name + ': ' + i.title + ' ' + \
-                    shorten_urls_dict.get(i.link, "")
-                await channel.send(msg)
+                embed.add_field(
+                    name=i.title,
+                    value=shorten_urls_dict.get(i.link, "")
+                )
+            await channel.send(embed=embed)
 
     @checker_task.before_loop
     async def before_checker_task(self):
