@@ -50,10 +50,12 @@ class MonInfoReader:
     def parse(self):
         # モンスター名の解析
         name_line = '\n'.join(self.name_lines)
-        m = re.match(r"^(?:\[.\])?\s*(?:(.+)\/)?(.+)\s*\(.+?\)$", name_line,
+        m = re.match(r"^(\[.\])?\s*(?:(.+)\/)?(.+)\s*\((.+?)\)$", name_line,
                      flags=re.DOTALL)
-        name = m[1].replace('\n', '')
-        english_name = m[2].replace('\n', ' ')
+        name = m[2].replace('\n', '')
+        english_name = m[3].replace('\n', ' ')
+        is_unique = True if m[1] else False
+        symbol = m[4].replace('\n', '')
 
         # モンスター情報の解析
         m = re.match(r"^=== Num:(\d+)  Lev:(\d+)  Rar:(\d+)  Spd:(.+)  Hp:(.+)  Ac:(\d+)  Exp:(\d+)",
@@ -62,6 +64,8 @@ class MonInfoReader:
             'id': m[1],
             'name': name,
             'english_name': english_name,
+            'is_unique': is_unique,
+            'symbol': symbol,
             'level': m[2],
             'rarity': m[3],
             'speed': m[4],
@@ -113,7 +117,8 @@ class MonsterSpoiler(commands.Cog):
         await ctx.reply(embed=embed)
 
     async def send_mon_info(self, ctx: commands.Context, mon_info):
-        title = "{name} / {english_name}".format(**mon_info)
+        title = "[U] " if mon_info["is_unique"] else ""
+        title += "{name} / {english_name} ({symbol})".format(**mon_info)
         description = "ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  Exp:{exp}\n\n"\
             .format(**mon_info)
         description += self.get_mon_info_detail(mon_info["id"])
@@ -157,7 +162,7 @@ class MonsterSpoiler(commands.Cog):
             c.row_factory = sqlite3.Row
             c.execute(
                 '''
-SELECT id, name, english_name, level, rarity, speed, hp, ac, exp
+SELECT id, name, english_name, is_unique, symbol, level, rarity, speed, hp, ac, exp
     FROM mon_info
 '''
             )
@@ -172,6 +177,8 @@ CREATE TABLE mon_info(
     id INTEGER PRIMARY KEY,
     name TEXT,
     english_name TEXT,
+    is_unique INTEGER,
+    symbol TEXT,
     level INTEGER,
     rarity INTEGER,
     speed INTEGER,
@@ -191,7 +198,7 @@ CREATE TABLE mon_info(
             c.executemany(
                 '''
 INSERT INTO mon_info VALUES(
-    :id, :name, :english_name, :level, :rarity, :speed, :hp, :ac, :exp, :detail
+    :id, :name, :english_name, :is_unique, :symbol, :level, :rarity, :speed, :hp, :ac, :exp, :detail
 )
 ''',
                 mon_info_reader.get_mon_info_list(self.mon_info_file)
