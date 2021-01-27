@@ -7,6 +7,7 @@ from typing import List
 
 import discord
 from discord.ext import commands
+from fuzzywuzzy import fuzz
 
 
 @dataclass
@@ -88,17 +89,24 @@ class MonsterSpoiler(commands.Cog):
     async def mon(self, ctx: commands.Context, name: str):
         candidates = [m for m in self.mon_info_list if name in m["name"]]
         if not candidates:
-            await self.send_error(ctx, "候補が見つかりません")
+            suggests = sorted(
+                self.mon_info_list,
+                key=lambda m: fuzz.ratio(m["name"], name), reverse=True
+            )[:10]
+            await self.choice_and_send_mon_info(ctx, "もしかして:", suggests)
         elif len(candidates) == 1:
             await self.send_mon_info(ctx, candidates[0])
         elif len(candidates) <= 10:
-            msg = await self.send_mon_candidates(ctx, candidates)
-            choice = await self.wait_for_choice(ctx, msg)
-            await msg.delete()
-            if choice is not None:
-                await self.send_mon_info(ctx, candidates[choice])
+            await self.choice_and_send_mon_info(ctx, "候補:", candidates)
         else:
             await self.send_error(ctx, "候補が多すぎます")
+
+    async def choice_and_send_mon_info(self, ctx: commands.Context, choice_msg: str, mon_candidates):
+        msg = await self.send_mon_candidates(ctx, choice_msg, mon_candidates)
+        choice = await self.wait_for_choice(ctx, msg)
+        await msg.delete()
+        if choice is not None:
+            await self.send_mon_info(ctx, mon_candidates[choice])
 
     async def send_error(self, ctx: commands.Context, error_msg: str):
         embed = discord.Embed(title=error_msg, color=discord.Color.red())
@@ -112,9 +120,9 @@ class MonsterSpoiler(commands.Cog):
         embed = discord.Embed(title=title, description=description)
         await ctx.reply(embed=embed)
 
-    async def send_mon_candidates(self, ctx: commands.Context, mon_candidates):
+    async def send_mon_candidates(self, ctx: commands.Context, choice_msg: str, mon_candidates):
         description = '\n'.join([num + " " + mon["name"] for num, mon in zip(self.NUM_EMOJIS, mon_candidates)])
-        embed = discord.Embed(title="候補:", description=description)
+        embed = discord.Embed(title=choice_msg, description=description)
         msg: discord.Message = await ctx.reply(embed=embed)
         for i in range(len(mon_candidates)):
             await msg.add_reaction(self.NUM_EMOJIS[i])
