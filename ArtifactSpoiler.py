@@ -289,7 +289,9 @@ class ArtifactSpoiler(commands.Cog):
         a = ArtifactInfoReader()
         a.create_a_info_table(self.db_path, os.path.expanduser(config["a_info_path"]))
         f = FlagInfoReader()
-        f.create_flag_info_table(self.db_path, "flag_info.txt")
+        f.create_flag_info_table(
+            self.db_path,
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "flag_info.txt"))
 
         def fullname(art: dict):
             a = art["a_name"]
