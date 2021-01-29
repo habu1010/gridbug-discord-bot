@@ -409,6 +409,10 @@ ORDER BY
             flags = c.fetchall()
 
         main = f"[{art.id}] ★{art.fullname}"
+        if a_info["is_melee_weapon"]:
+            main += f" ({a_info['base_dam']})"
+        elif a_info["range_weapon_mult"] > 0:
+            main += f" (x{a_info['range_weapon_mult']})"
         main += self.describe_to_hit_dam(a_info)
         main += self.describe_ac(a_info)
 
