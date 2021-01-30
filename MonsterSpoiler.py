@@ -1,4 +1,3 @@
-import asyncio
 import os
 import re
 import sqlite3
@@ -8,6 +7,8 @@ from typing import List
 import discord
 from discord.ext import commands
 from fuzzywuzzy import fuzz
+
+import CandidatesSelector
 
 
 @dataclass
@@ -78,10 +79,6 @@ class MonInfoReader:
 
 
 class MonsterSpoiler(commands.Cog):
-    NUM_EMOJIS = [
-        '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'
-    ]
-
     def __init__(self, bot: commands.Bot, config: dict):
         self.mon_info_file = os.path.expanduser(config["mon_info_file"])
         self.mon_info_db_path = os.path.expanduser(config["mon_info_db_path"])
@@ -105,10 +102,8 @@ class MonsterSpoiler(commands.Cog):
         else:
             await self.send_error(ctx, "候補が多すぎます")
 
-    async def choice_and_send_mon_info(self, ctx: commands.Context, choice_msg: str, mon_candidates):
-        msg = await self.send_mon_candidates(ctx, choice_msg, mon_candidates)
-        choice = await self.wait_for_choice(ctx, msg)
-        await msg.delete()
+    async def choice_and_send_mon_info(self, ctx: commands.Context, choice_msg: str, mon_candidates: List[dict]):
+        choice = await CandidatesSelector.select(ctx, choice_msg, [mon["name"] for mon in mon_candidates])
         if choice is not None:
             await self.send_mon_info(ctx, mon_candidates[choice])
 
@@ -124,29 +119,6 @@ class MonsterSpoiler(commands.Cog):
         description += self.get_mon_info_detail(mon_info["id"])
         embed = discord.Embed(title=title, description=description)
         await ctx.reply(embed=embed)
-
-    async def send_mon_candidates(self, ctx: commands.Context, choice_msg: str, mon_candidates):
-        description = '\n'.join([num + " " + mon["name"] for num, mon in zip(self.NUM_EMOJIS, mon_candidates)])
-        embed = discord.Embed(title=choice_msg, description=description)
-        msg: discord.Message = await ctx.reply(embed=embed)
-        for i in range(len(mon_candidates)):
-            await msg.add_reaction(self.NUM_EMOJIS[i])
-        return msg
-
-    async def wait_for_choice(self, ctx: commands.Context, candidates_msg: discord.Message):
-        def check(payload: discord.RawReactionActionEvent):
-            return \
-                ctx.message.author.id == payload.user_id and \
-                payload.message_id == candidates_msg.id and \
-                str(payload.emoji) in self.NUM_EMOJIS
-        try:
-            payload = await self.bot.wait_for('raw_reaction_add', timeout=15.0, check=check)
-        except asyncio.TimeoutError:
-            return None
-        for i, emoji in enumerate(self.NUM_EMOJIS):
-            if str(payload.emoji) == emoji:
-                return i
-        return None
 
     def get_mon_info_detail(self, monster_id):
         with sqlite3.connect(self.mon_info_db_path) as conn:

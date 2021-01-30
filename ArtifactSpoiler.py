@@ -1,4 +1,3 @@
-import asyncio
 import os
 import sqlite3
 from dataclasses import asdict, dataclass
@@ -7,6 +6,8 @@ from typing import List
 import discord
 from discord.ext import commands
 from fuzzywuzzy import fuzz
+
+import CandidatesSelector
 
 
 @dataclass
@@ -266,10 +267,6 @@ INSERT INTO flag_info VALUES(:name, :flag_group, :id_in_group, :description)
 
 
 class ArtifactSpoiler(commands.Cog):
-    NUM_EMOJIS = [
-        '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'
-    ]
-
     @dataclass
     class Artifact:
         """アーティファクト検索用クラス
@@ -352,35 +349,10 @@ FROM
         embed = discord.Embed(title=art_desc[0], description=art_desc[1])
         await ctx.reply(embed=embed)
 
-    async def choice_and_send_artifact_info(self, ctx: commands.Context, choice_msg: str, candidates):
-        msg = await self.send_artifact_candidates(ctx, choice_msg, candidates)
-        choice = await self.wait_for_choice(ctx, msg)
-        await msg.delete()
+    async def choice_and_send_artifact_info(self, ctx: commands.Context, choice_msg: str, candidates: List[Artifact]):
+        choice = CandidatesSelector.select(ctx, choice_msg, [art.fullname for art in candidates])
         if choice is not None:
             await self.send_artifact_info(ctx, candidates[choice])
-
-    async def send_artifact_candidates(self, ctx: commands.Context, choice_msg: str, candidates):
-        description = '\n'.join([num + " " + art.fullname for num, art in zip(self.NUM_EMOJIS, candidates)])
-        embed = discord.Embed(title=choice_msg, description=description)
-        msg: discord.Message = await ctx.reply(embed=embed)
-        for i in range(len(candidates)):
-            await msg.add_reaction(self.NUM_EMOJIS[i])
-        return msg
-
-    async def wait_for_choice(self, ctx: commands.Context, candidates_msg: discord.Message):
-        def check(payload: discord.RawReactionActionEvent):
-            return \
-                ctx.message.author.id == payload.user_id and \
-                payload.message_id == candidates_msg.id and \
-                str(payload.emoji) in self.NUM_EMOJIS
-        try:
-            payload = await self.bot.wait_for('raw_reaction_add', timeout=15.0, check=check)
-        except asyncio.TimeoutError:
-            return None
-        for i, emoji in enumerate(self.NUM_EMOJIS):
-            if str(payload.emoji) == emoji:
-                return i
-        return None
 
     async def send_error(self, ctx: commands.Context, error_msg: str):
         embed = discord.Embed(title=error_msg, color=discord.Color.red())
