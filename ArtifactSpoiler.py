@@ -350,7 +350,7 @@ FROM
         await ctx.reply(embed=embed)
 
     async def choice_and_send_artifact_info(self, ctx: commands.Context, choice_msg: str, candidates: List[Artifact]):
-        choice = CandidatesSelector.select(ctx, choice_msg, [art.fullname for art in candidates])
+        choice = await CandidatesSelector.select(ctx, choice_msg, [art.fullname for art in candidates])
         if choice is not None:
             await self.send_artifact_info(ctx, candidates[choice])
 
