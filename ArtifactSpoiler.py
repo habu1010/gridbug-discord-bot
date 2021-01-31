@@ -2,7 +2,7 @@ import os
 import re
 import sqlite3
 from dataclasses import asdict, dataclass
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 
 import discord
 from discord.ext import commands
@@ -285,13 +285,13 @@ class ActivationInfoReader():
         for line in lines:
             m = pattern.match(prev_line + line) if prev_line else pattern.match(line)
             if m:
-                yield {"flag": m[1], "level": int(m[3]), "value": int(m[4]), "timeout": int(m[5]),
+                yield {"flag": m[1], "level": int(m[3]), "value": int(m[4]), "timeout": int(m[5]), "dice": int(m[6]),
                        "desc": m[7], "eng_desc": m[8]}
                 prev_line = None
             else:
                 prev_line = line
 
-        yield {"flag": "NONE", "level": 0, "value": 0, "timeout": 0,
+        yield {"flag": "NONE", "level": 0, "value": 0, "timeout": 0, "dice": 0,
                "desc": "なし", "eng_desc": "none"}
 
     def create_activation_info_table(self, db_path: str, info_table_file: str) -> None:
@@ -304,13 +304,14 @@ CREATE TABLE activation_info(
     level INTEGER,
     value INTEGER,
     timeout INTEGER,
+    dice INTEGER,
     desc TEXT,
     eng_desc TEXT
 )
 ''')
             conn.executemany(
                 '''
-INSERT INTO activation_info VALUES(:flag, :level, :value, :timeout, :desc, :eng_desc)
+INSERT INTO activation_info VALUES(:flag, :level, :value, :timeout, :dice, :desc, :eng_desc)
 ''',
                 self.get_activation_info_list(info_table_file))
 
@@ -500,10 +501,20 @@ ORDER BY
         if a_info["activate_flag"] == "NONE":
             return ""
         timeout = (
-            f"{a_info['timeout']} ターン毎" if a_info['timeout'] > 0 else
+            self.describe_activation_timeout(a_info['timeout'], a_info['dice']) or
             self.describe_activation_timeout_special(a_info['activate_flag'])
         )
         return f"\n発動した時の効果...\n{a_info['desc']} : {timeout}"
+
+    def describe_activation_timeout(self, timeout, dice) -> Optional[str]:
+        if timeout == 0:
+            return "いつでも"
+        elif timeout > 0 and dice == 0:
+            return f"{timeout} ターン毎"
+        elif timeout > 0 and dice > 0:
+            return f"{timeout}+d{dice} ターン毎"
+
+        return None
 
     def describe_activation_timeout_special(self, flag: str):
         DICT = {"TERROR": "3*(レベル+10) ターン毎",
