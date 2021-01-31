@@ -1,7 +1,8 @@
 import os
+import re
 import sqlite3
 from dataclasses import asdict, dataclass
-from typing import List
+from typing import Iterator, List
 
 import discord
 from discord.ext import commands
@@ -89,6 +90,7 @@ class ArtifactInfo:
     to_hit: int = 0
     to_dam: int = 0
     to_ac: int = 0
+    activate_flag: str = "NONE"
 
     def __init__(self):
         self.flags = []
@@ -154,6 +156,8 @@ class ArtifactInfoReader:
             elif cols[0] == "F":
                 flags = [flag.strip() for flag in cols[1].split('|') if flag.strip()]
                 a_info.flags.extend(flags)
+            elif cols[0] == "U":
+                a_info.activate_flag = cols[1]
 
         if a_info.is_complete_data():
             yield a_info
@@ -181,6 +185,7 @@ CREATE TABLE a_info(
     to_hit INGEGER,
     to_dam INGEGER,
     to_ac INGEGER,
+    activate_flag TEXT,
     is_melee_weapon BOOLEAN,
     range_weapon_mult INTEGER,
     is_protective_equipment BOOLEAN,
@@ -207,6 +212,7 @@ CREATE TABLE a_info_flags(
         :id, :name, :english_name, :tval, :sval, :pval,
         :depth, :rarity, :weight, :cost,
         :base_ac, :base_dam, :to_hit, :to_dam, :to_ac,
+        :activate_flag,
         {a_info.is_melee_weapon}, {a_info.range_weapon_mult}, {a_info.is_protective_equipment}, { a_info.is_armor}
     )
 '''
@@ -266,6 +272,49 @@ INSERT INTO flag_info VALUES(:name, :flag_group, :id_in_group, :description)
                     )
 
 
+class ActivationInfoReader():
+    def get_activation_info_list(self, info_table_file: str) -> Iterator[dict]:
+        with open(info_table_file) as f:
+            lines = [line.strip() for line in f.readlines()]
+
+        pattern = re.compile(
+            r'{\s*"(\w+)",\s*(\w+),\s*([-]?\d+)\s*,\s*([-]?\d+)\s*,'
+            r'\s*{\s*([-]?\d+)\s*,\s*([-]?\d+)\s*},\s*_\("(.+)",\s*"(.+)"\)\s*}'
+        )
+        prev_line = None
+        for line in lines:
+            m = pattern.match(prev_line + line) if prev_line else pattern.match(line)
+            if m:
+                yield {"flag": m[1], "level": int(m[3]), "value": int(m[4]), "timeout": int(m[5]),
+                       "desc": m[7], "eng_desc": m[8]}
+                prev_line = None
+            else:
+                prev_line = line
+
+        yield {"flag": "NONE", "level": 0, "value": 0, "timeout": 0,
+               "desc": "なし", "eng_desc": "none"}
+
+    def create_activation_info_table(self, db_path: str, info_table_file: str) -> None:
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("DROP TABLE IF EXISTS activation_info")
+            conn.execute(
+                '''
+CREATE TABLE activation_info(
+    flag TEXT PRIMARY KEY,
+    level INTEGER,
+    value INTEGER,
+    timeout INTEGER,
+    desc TEXT,
+    eng_desc TEXT
+)
+''')
+            conn.executemany(
+                '''
+INSERT INTO activation_info VALUES(:flag, :level, :value, :timeout, :desc, :eng_desc)
+''',
+                self.get_activation_info_list(info_table_file))
+
+
 class ArtifactSpoiler(commands.Cog):
     @dataclass
     class Artifact:
@@ -281,10 +330,14 @@ class ArtifactSpoiler(commands.Cog):
     def __init__(self, bot: commands.Command, config: dict):
         self.bot = bot
         self.db_path = os.path.expanduser(config["db_path"])
+        hengband_dir = os.path.expanduser(config["hengband_dir"])
         k = KindInfoReader()
-        k.create_k_info_table(self.db_path, os.path.expanduser(config["k_info_path"]))
+        k.create_k_info_table(self.db_path, os.path.join(hengband_dir, "lib/edit/k_info.txt"))
         a = ArtifactInfoReader()
-        a.create_a_info_table(self.db_path, os.path.expanduser(config["a_info_path"]))
+        a.create_a_info_table(self.db_path, os.path.join(hengband_dir, "lib/edit/a_info.txt"))
+        ai = ActivationInfoReader()
+        ai.create_activation_info_table(self.db_path, os.path.join(
+            hengband_dir, "src/object-enchant/activation-info-table.c"))
         f = FlagInfoReader()
         f.create_flag_info_table(
             self.db_path,
@@ -362,7 +415,17 @@ FROM
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.row_factory = sqlite3.Row
-            c.execute("SELECT * from a_info WHERE id = :id", {'id': art.id})
+            c.execute(
+                '''
+SELECT
+    *
+FROM
+    a_info
+    JOIN activation_info ON a_info.activate_flag = activation_info.flag
+WHERE
+    a_info.id = :id
+''',
+                {'id': art.id})
             a_info = c.fetchall()[0]
             c.execute(
                 f'''
@@ -399,6 +462,7 @@ ORDER BY
         detail += self.describe_flag_group(flags, "", 'MISC')
         detail += self.describe_flag_group(flags, "", 'CURSE')
         detail += self.describe_flag_group(flags, "追加: ", 'XTRA')
+        detail += self.describe_activation(a_info)
         detail += "\n\n"
         detail += f"階層:{a_info['depth']}, 希少度:{a_info['rarity']}, {a_info['weight']/20:.1f}kg, ${a_info['cost']}"
 
@@ -431,6 +495,20 @@ ORDER BY
             [flag["description"] for flag in flags
              if flag["flag_group"] == group_name]
         )+"; "
+
+    def describe_activation(self, a_info: dict):
+        if a_info["activate_flag"] == "NONE":
+            return ""
+        timeout = (
+            f"{a_info['timeout']} ターン毎" if a_info['timeout'] > 0 else
+            self.describe_activation_timeout_special(a_info['activate_flag'])
+        )
+        return f"\n発動した時の効果...\n{a_info['desc']} : {timeout}"
+
+    def describe_activation_timeout_special(self, flag: str):
+        DICT = {"TERROR": "3*(レベル+10) ターン毎",
+                "MURAMASA": "確率50%で壊れる"}
+        return DICT.get(flag, "不明")
 
     def output_test(self):
         for art in self.artifacts:
