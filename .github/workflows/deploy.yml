@@ -42,3 +42,9 @@ jobs:
         run: |
           echo "${SSH_PRIVATE_KEY}" > secret_key && chmod 600 secret_key
           ssh -oStrictHostKeyChecking=no -i secret_key ${REMOTE_USER}@${REMOTE_HOST} "${BOT_RESTART_COMMAND}"
+
+      - name: Notify to discord
+        uses: sarisia/actions-status-discord@v1
+        if: always()
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
