@@ -1,11 +1,11 @@
-import json
 import logging
 import os
 
+import yaml
 from discord.ext import commands
 
-with open(os.path.expanduser('~/.bot-config.json'), 'r') as f:
-    bot_config = json.load(f)
+with open(os.path.expanduser('~/.bot-config.yml'), 'r') as f:
+    bot_config = yaml.full_load(f)
 
 logging.basicConfig(
     level=bot_config.get('logging_level', 'WARNING'))
