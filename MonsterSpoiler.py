@@ -9,6 +9,7 @@ from discord.ext import commands
 from fuzzywuzzy import fuzz
 
 import CandidatesSelector
+from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 
 
 @dataclass
@@ -86,29 +87,54 @@ class MonsterSpoiler(commands.Cog):
         self.load_mon_info()
         self.bot = bot
 
+        self.parser = ErrorCatchingArgumentParser(
+            prog="$mon", add_help=False,
+            description="モンスターを名称の一部で検索し、情報を表示します。"
+            "複数のモンスターがヒットした場合は候補を表示し、リアクションにより選択します。"
+            "一件もヒットしなかった場合は、あいまい検索により候補を表示します。")
+        self.parser.add_argument(
+            "-e", "--english", action="store_true", default=False,
+            help="英語名で検索する / Search by English name")
+        self.parser.add_argument(
+            "-h", "--help", action="store_true", default=False,
+            help="このヘルプメッセージを表示する")
+        self.parser.add_argument("name", help="検索するモンスターの名称の一部", nargs='?')
+
     @commands.command()
-    async def mon(self, ctx: commands.Context, name: str):
-        candidates = [m for m in self.mon_info_list if name in m["name"]]
+    async def mon(self, ctx: commands.Context, *args):
+        try:
+            parse_result = self.parser.parse_args(args)
+        except Exception as e:
+            await self.send_error(ctx, str(e), self.parser.format_help())
+            return
+        if len(args) == 0 or parse_result.help:
+            await self.send_error(ctx, "ヘルプ", self.parser.format_help())
+            return
+
+        search_name = parse_result.name.lower()
+        name_key = "english_name" if parse_result.english else "name"
+        candidates = [m for m in self.mon_info_list if search_name in m[name_key].lower()]
         if not candidates:
             suggests = sorted(
                 self.mon_info_list,
-                key=lambda m: fuzz.ratio(m["name"], name), reverse=True
+                key=lambda m: fuzz.partial_ratio(m[name_key].lower(), search_name), reverse=True
             )[:10]
-            await self.choice_and_send_mon_info(ctx, "もしかして:", suggests)
+            await self.choice_and_send_mon_info(ctx, "もしかして:", suggests, name_key)
         elif len(candidates) == 1:
             await self.send_mon_info(ctx, candidates[0])
         elif len(candidates) <= 10:
-            await self.choice_and_send_mon_info(ctx, "候補:", candidates)
+            await self.choice_and_send_mon_info(ctx, "候補:", candidates, name_key)
         else:
-            await self.send_error(ctx, "候補が多すぎます")
+            await self.send_error(ctx, "エラー", "候補が多すぎます")
 
-    async def choice_and_send_mon_info(self, ctx: commands.Context, choice_msg: str, mon_candidates: List[dict]):
-        choice = await CandidatesSelector.select(ctx, choice_msg, [mon["name"] for mon in mon_candidates])
+    async def choice_and_send_mon_info(
+            self, ctx: commands.Context, choice_msg: str, mon_candidates: List[dict], name_key: str):
+        choice = await CandidatesSelector.select(ctx, choice_msg, [mon[name_key] for mon in mon_candidates])
         if choice is not None:
             await self.send_mon_info(ctx, mon_candidates[choice])
 
-    async def send_error(self, ctx: commands.Context, error_msg: str):
-        embed = discord.Embed(title=error_msg, color=discord.Color.red())
+    async def send_error(self, ctx: commands.Context, error_title: str, error_msg: str):
+        embed = discord.Embed(title=error_title, description=error_msg, color=discord.Color.red())
         await ctx.reply(embed=embed)
 
     async def send_mon_info(self, ctx: commands.Context, mon_info):
