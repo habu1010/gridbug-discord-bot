@@ -9,6 +9,7 @@ from discord.ext import commands
 from fuzzywuzzy import fuzz
 
 import CandidatesSelector
+from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 
 
 @dataclass
@@ -327,6 +328,7 @@ class ArtifactSpoiler(commands.Cog):
         """
         id: int = 0
         fullname: str = ""
+        fullname_en: str = ""
 
     def __init__(self, bot: commands.Command, config: dict):
         self.bot = bot
@@ -353,6 +355,12 @@ class ArtifactSpoiler(commands.Cog):
                 return k + a
             return a + k
 
+        def fullname_en(art: dict):
+            a = art["a_name_en"]
+            k = art["k_name_en"]
+            f = a if art["is_fullname"] else f"{k} {a}"
+            return f.replace("&", "The").replace("~", "")
+
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.row_factory = sqlite3.Row
@@ -361,7 +369,9 @@ class ArtifactSpoiler(commands.Cog):
 SELECT
     a_info.id AS id,
     a_info.name AS a_name,
+    a_info.english_name AS a_name_en,
     k_info.name AS k_name,
+    k_info.english_name AS k_name_en,
     (
         SELECT
             COUNT(*)
@@ -379,22 +389,47 @@ FROM
             )
 
             self.artifacts = \
-                [self.Artifact(art["id"], fullname(art)) for art in c.fetchall()]
+                [asdict(self.Artifact(art["id"], fullname(art), fullname_en(art))) for art in c.fetchall()]
             pass
 
-    @commands.command()
-    async def art(self, ctx: commands.Context, name: str):
-        candidates = [art for art in self.artifacts if name in art.fullname]
+        self.parser = ErrorCatchingArgumentParser(prog="art", add_help=False)
+        self.parser.add_argument("-e", "--english", action="store_true")
+        self.parser.add_argument("artifact_name")
+
+    @commands.command(usage="[-e] artifact_name")
+    async def art(self, ctx: commands.Context, *args):
+        """アーティファクトを検索する
+
+        アーティファクトを名称の一部で検索し、情報を表示します。
+        複数のアーティファクトが見つかった場合は候補を表示し、リアクションで選択します。
+        一件もヒットしなかった場合は、あいまい検索により候補を表示します。
+
+        positional arguments:
+          artifact_name         検索するアーティファクトの名称の一部
+
+        optional arguments:
+          -e, --english         英語名で検索する
+        """
+
+        try:
+            parse_result = self.parser.parse_args(args)
+        except Exception:
+            await ctx.send_help(ctx.command)
+            return
+
+        search_name = parse_result.artifact_name
+        name_key = "fullname_en" if parse_result.english else "fullname"
+        candidates = [art for art in self.artifacts if search_name in art[name_key]]
         if not candidates:
             suggests = sorted(
                 self.artifacts,
-                key=lambda x: fuzz.ratio(x.fullname, name), reverse=True
+                key=lambda x: fuzz.partial_ratio(x[name_key], search_name), reverse=True
             )[:10]
-            await self.choice_and_send_artifact_info(ctx, "もしかして:", suggests)
+            await self.choice_and_send_artifact_info(ctx, "もしかして:", suggests, name_key)
         elif len(candidates) == 1:
             await self.send_artifact_info(ctx, candidates[0])
         elif len(candidates) <= 10:
-            await self.choice_and_send_artifact_info(ctx, "候補:", candidates)
+            await self.choice_and_send_artifact_info(ctx, "候補:", candidates, name_key)
         else:
             await self.send_error(ctx, "候補が多すぎます")
 
@@ -403,8 +438,9 @@ FROM
         embed = discord.Embed(title=art_desc[0], description=art_desc[1])
         await ctx.reply(embed=embed)
 
-    async def choice_and_send_artifact_info(self, ctx: commands.Context, choice_msg: str, candidates: List[Artifact]):
-        choice = await CandidatesSelector.select(ctx, choice_msg, [art.fullname for art in candidates])
+    async def choice_and_send_artifact_info(
+            self, ctx: commands.Context, choice_msg: str, candidates: List[Artifact], name_key: str):
+        choice = await CandidatesSelector.select(ctx, choice_msg, [art[name_key] for art in candidates])
         if choice is not None:
             await self.send_artifact_info(ctx, candidates[choice])
 
@@ -426,7 +462,7 @@ FROM
 WHERE
     a_info.id = :id
 ''',
-                {'id': art.id})
+                {'id': art["id"]})
             a_info = c.fetchall()[0]
             c.execute(
                 f'''
@@ -436,7 +472,7 @@ FROM
     a_info_flags
     JOIN flag_info ON a_info_flags.flag = flag_info.name
 WHERE
-    a_info_flags.id = {art.id}
+    a_info_flags.id = {art['id']}
 ORDER BY
     flag_group,
     id_in_group
@@ -444,13 +480,15 @@ ORDER BY
             )
             flags = c.fetchall()
 
-        main = f"[{art.id}] ★{art.fullname}"
+        main = f"[{art['id']} ★{art['fullname']}"
         if a_info["is_melee_weapon"]:
             main += f" ({a_info['base_dam']})"
         elif a_info["range_weapon_mult"] > 0:
             main += f" (x{a_info['range_weapon_mult']})"
         main += self.describe_to_hit_dam(a_info)
         main += self.describe_ac(a_info)
+
+        main += f" / {art['fullname_en']}"
 
         detail = self.describe_flag_group(flags, f"{a_info['pval']:+} ", 'BONUS')
         detail += self.describe_flag_group(flags, "スレイ: ", 'SLAYING')
