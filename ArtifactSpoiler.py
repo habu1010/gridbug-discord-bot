@@ -496,7 +496,7 @@ ORDER BY
         detail += self.describe_flag_group(flags, "免疫: ", 'IMMUNITY')
         detail += self.describe_flag_group(flags, "耐性: ", 'RESISTANCE')
         detail += self.describe_flag_group(flags, "ESP: ", 'ESP')
-        detail += self.describe_flag_group(flags, "維持: ", 'SUSTAIN')
+        detail += self.describe_flag_group(flags, "能力維持: ", 'SUSTAIN_STATUS')
         detail += self.describe_flag_group(flags, "", 'POWER')
         detail += self.describe_flag_group(flags, "", 'MISC')
         detail += self.describe_flag_group(flags, "", 'CURSE')
