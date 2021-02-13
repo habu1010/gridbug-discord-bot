@@ -6,9 +6,8 @@ from typing import Iterator, List, Optional
 
 import discord
 from discord.ext import commands
-from fuzzywuzzy import fuzz
 
-import CandidatesSelector
+import ListSearch
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 
 
@@ -417,32 +416,18 @@ FROM
             await ctx.send_help(ctx.command)
             return
 
-        search_name = parse_result.artifact_name
-        name_key = "fullname_en" if parse_result.english else "fullname"
-        candidates = [art for art in self.artifacts if search_name in art[name_key]]
-        if not candidates:
-            suggests = sorted(
-                self.artifacts,
-                key=lambda x: fuzz.partial_ratio(x[name_key], search_name), reverse=True
-            )[:10]
-            await self.choice_and_send_artifact_info(ctx, "もしかして:", suggests, name_key)
-        elif len(candidates) == 1:
-            await self.send_artifact_info(ctx, candidates[0])
-        elif len(candidates) <= 10:
-            await self.choice_and_send_artifact_info(ctx, "候補:", candidates, name_key)
-        else:
-            await self.send_error(ctx, "候補が多すぎます")
+        choice, error_msg = await ListSearch.search(
+            ctx, self.artifacts, parse_result.artifact_name, "fullname", "fullname_en", parse_result.english)
+
+        if choice:
+            await self.send_artifact_info(ctx, choice)
+        elif error_msg:
+            await self.send_error(ctx, error_msg)
 
     async def send_artifact_info(self, ctx: commands.Context, art: Artifact):
         art_desc = self.describe_artifact(art)
         embed = discord.Embed(title=art_desc[0], description=art_desc[1])
         await ctx.reply(embed=embed)
-
-    async def choice_and_send_artifact_info(
-            self, ctx: commands.Context, choice_msg: str, candidates: List[Artifact], name_key: str):
-        choice = await CandidatesSelector.select(ctx, choice_msg, [art[name_key] for art in candidates])
-        if choice is not None:
-            await self.send_artifact_info(ctx, candidates[choice])
 
     async def send_error(self, ctx: commands.Context, error_msg: str):
         embed = discord.Embed(title=error_msg, color=discord.Color.red())
