@@ -426,7 +426,9 @@ FROM
 
     async def send_artifact_info(self, ctx: commands.Context, art: Artifact):
         art_desc = self.describe_artifact(art)
-        embed = discord.Embed(title=art_desc[0], description=art_desc[1])
+        embed = discord.Embed(
+            title=discord.utils.escape_markdown(art_desc[0]),
+            description=discord.utils.escape_markdown(art_desc[1]))
         await ctx.reply(embed=embed)
 
     async def send_error(self, ctx: commands.Context, error_msg: str):
