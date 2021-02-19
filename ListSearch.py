@@ -46,7 +46,7 @@ async def search(
     if not candidates:
         suggests = sorted(
             items,
-            key=lambda x: fuzz.partial_ratio(x[name], search_str), reverse=True
+            key=lambda x: fuzz.partial_ratio(search_str, str.lower(x[name])), reverse=True
         )[:10]
         choice = await CandidatesSelector.select(ctx, "もしかして:", [i[name] for i in suggests])
         return (suggests[choice] if choice is not None else None, None)
