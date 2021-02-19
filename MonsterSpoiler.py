@@ -1,89 +1,17 @@
 import os
-import re
-import sqlite3
-from dataclasses import dataclass
-from typing import List
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 import ListSearch
+import MonsterInfo
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
-
-
-@dataclass
-class MonInfoReader:
-    name_lines: List[str]
-    detail_lines: List[str]
-    info_line: str = None
-
-    def __init__(self):
-        self.clear()
-
-    def clear(self):
-        self.name_lines = []
-        self.detail_lines = []
-        self.info_line = None
-
-    def has_complete_data(self):
-        return self.name_lines and self.info_line and self.detail_lines
-
-    def push_line(self, line: str):
-        if line.startswith('==='):
-            self.info_line = line
-        elif self.info_line:
-            self.detail_lines.append(line)
-        else:
-            self.name_lines.append(line)
-
-    def get_mon_info_list(self, mon_info_file: str):
-        with open(mon_info_file, encoding='euc_jp') as f:
-            lines = (line.strip() for line in f.readlines())
-
-        for line in lines:
-            if not line:
-                if self.has_complete_data():
-                    yield self.parse()
-                self.clear()
-            else:
-                self.push_line(line)
-
-    def parse(self):
-        # モンスター名の解析
-        name_line = '\n'.join(self.name_lines)
-        m = re.match(r"^(\[.\])?\s*(?:(.+)\/)?(.+)\s*\((.+?)\)$", name_line,
-                     flags=re.DOTALL)
-        name = m[2].replace('\n', '')
-        english_name = m[3].replace('\n', ' ')
-        is_unique = True if m[1] else False
-        symbol = m[4].replace('\n', '')
-
-        # モンスター情報の解析
-        m = re.match(r"^=== Num:(\d+)  Lev:(\d+)  Rar:(\d+)  Spd:(.+)  Hp:(.+)  Ac:(\d+)  Exp:(\d+)",
-                     self.info_line)
-        result = {
-            'id': m[1],
-            'name': name,
-            'english_name': english_name,
-            'is_unique': is_unique,
-            'symbol': symbol,
-            'level': m[2],
-            'rarity': m[3],
-            'speed': m[4],
-            'hp': m[5],
-            'ac': m[6],
-            'exp': m[7],
-            'detail': ''.join(self.detail_lines)
-        }
-        return result
 
 
 class MonsterSpoiler(commands.Cog):
     def __init__(self, bot: commands.Bot, config: dict):
-        self.mon_info_file = os.path.expanduser(config["mon_info_file"])
-        self.mon_info_db_path = os.path.expanduser(config["mon_info_db_path"])
-        self.create_monster_info_db()
-        self.load_mon_info()
+        self.mon_info_url = config["mon_info_url"]
+        self.m_info = MonsterInfo.MonsterInfo(os.path.expanduser(config["mon_info_db_path"]))
         self.bot = bot
 
         self.parser = ErrorCatchingArgumentParser(
@@ -98,6 +26,8 @@ class MonsterSpoiler(commands.Cog):
             "-h", "--help", action="store_true", default=False,
             help="このヘルプメッセージを表示する")
         self.parser.add_argument("name", help="検索するモンスターの名称の一部", nargs='?')
+
+        self.checker_task.start()
 
     @commands.command()
     async def mon(self, ctx: commands.Context, *args):
@@ -127,65 +57,14 @@ class MonsterSpoiler(commands.Cog):
         title += "{name} / {english_name} ({symbol})".format(**mon_info)
         description = "ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  Exp:{exp}\n\n"\
             .format(**mon_info)
-        description += self.get_mon_info_detail(mon_info["id"])
+        description += self.m_info.get_monster_detail(mon_info["id"])
         embed = discord.Embed(title=title, description=description)
         await ctx.reply(embed=embed)
 
-    def get_mon_info_detail(self, monster_id):
-        with sqlite3.connect(self.mon_info_db_path) as conn:
-            c = conn.cursor()
-            c.execute("SELECT detail FROM mon_info WHERE id = :id",
-                      {"id": monster_id})
-            detail = c.fetchone()
-        return detail[0] if detail else ""
-
-    def load_mon_info(self):
-        with sqlite3.connect(self.mon_info_db_path) as conn:
-            c = conn.cursor()
-            c.row_factory = sqlite3.Row
-            c.execute(
-                '''
-SELECT id, name, english_name, is_unique, symbol, level, rarity, speed, hp, ac, exp
-    FROM mon_info
-'''
-            )
-            self.mon_info_list = c.fetchall()
-
-    def init_mon_info_db(self):
-        with sqlite3.connect(self.mon_info_db_path) as con:
-            con.execute('DROP TABLE IF EXISTS mon_info')
-            con.execute(
-                '''
-CREATE TABLE mon_info(
-    id INTEGER PRIMARY KEY,
-    name TEXT,
-    english_name TEXT,
-    is_unique INTEGER,
-    symbol TEXT,
-    level INTEGER,
-    rarity INTEGER,
-    speed INTEGER,
-    hp TEXT,
-    ac INTEGER,
-    exp INTEGER,
-    detail TEXT
-)
-'''
-            )
-
-    def create_monster_info_db(self):
-        self.init_mon_info_db()
-        mon_info_reader = MonInfoReader()
-        with sqlite3.connect(self.mon_info_db_path) as conn:
-            c = conn.cursor()
-            c.executemany(
-                '''
-INSERT INTO mon_info VALUES(
-    :id, :name, :english_name, :is_unique, :symbol, :level, :rarity, :speed, :hp, :ac, :exp, :detail
-)
-''',
-                mon_info_reader.get_mon_info_list(self.mon_info_file)
-            )
+    @tasks.loop(seconds=3600.0)
+    async def checker_task(self):
+        self.m_info.check_update(self.mon_info_url)
+        self.mon_info_list = self.m_info.get_monster_info_list()
 
 
 def setup(bot):
