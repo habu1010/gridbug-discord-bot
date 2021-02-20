@@ -14,34 +14,35 @@ class MonsterSpoiler(commands.Cog):
         self.m_info = MonsterInfo.MonsterInfo(os.path.expanduser(config["mon_info_db_path"]))
         self.bot = bot
 
-        self.parser = ErrorCatchingArgumentParser(
-            prog="$mon", add_help=False,
-            description="モンスターを名称の一部で検索し、情報を表示します。"
-            "複数のモンスターがヒットした場合は候補を表示し、リアクションにより選択します。"
-            "一件もヒットしなかった場合は、あいまい検索により候補を表示します。")
-        self.parser.add_argument(
-            "-e", "--english", action="store_true", default=False,
-            help="英語名で検索する / Search by English name")
-        self.parser.add_argument(
-            "-h", "--help", action="store_true", default=False,
-            help="このヘルプメッセージを表示する")
-        self.parser.add_argument("name", help="検索するモンスターの名称の一部", nargs='?')
+        self.parser = ErrorCatchingArgumentParser(prog="$mon", add_help=False)
+        self.parser.add_argument("-e", "--english", action="store_true")
+        self.parser.add_argument("monster_name")
 
         self.checker_task.start()
 
-    @commands.command()
+    @commands.command(usage="[-e] monster_name")
     async def mon(self, ctx: commands.Context, *args):
+        """モンスターを検索する
+
+        モンスターを名称の一部で検索し、情報を表示します。
+        複数のモンスターがヒットした場合は候補を表示し、リアクションにより選択します。
+        一件もヒットしなかった場合は、あいまい検索により候補を表示します。
+
+        positional arguments:
+          monster_name          検索するモンスターの名称の一部
+
+        optional arguments:
+          -e, --english         英語名で検索する
+        """
+
         try:
             parse_result = self.parser.parse_args(args)
-        except Exception as e:
-            await self.send_error(ctx, str(e), self.parser.format_help())
-            return
-        if len(args) == 0 or parse_result.help:
-            await self.send_error(ctx, "ヘルプ", self.parser.format_help())
+        except Exception:
+            await ctx.send_help(ctx.command)
             return
 
         choice, error_msg = await ListSearch.search(
-            ctx, self.mon_info_list, parse_result.name, "name", "english_name", parse_result.english)
+            ctx, self.mon_info_list, parse_result.monster_name, "name", "english_name", parse_result.english)
 
         if choice:
             await self.send_mon_info(ctx, choice)
