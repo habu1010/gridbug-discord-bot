@@ -477,20 +477,20 @@ ORDER BY
 
         main += f" / {art['fullname_en']}"
 
-        detail = self.describe_flag_group(flags, f"{a_info['pval']:+} ", 'BONUS')
-        detail += self.describe_flag_group(flags, "スレイ: ", 'SLAYING')
-        detail += self.describe_flag_group(flags, "属性: ", 'BRAND')
+        detail = self.describe_flag_group(flags, f"{a_info['pval']:+}の修正: ", 'BONUS')
+        detail += self.describe_flag_group(flags, "対: ", 'SLAYING')
+        detail += self.describe_flag_group(flags, "武器属性: ", 'BRAND')
         detail += self.describe_flag_group(flags, "免疫: ", 'IMMUNITY')
         detail += self.describe_flag_group(flags, "耐性: ", 'RESISTANCE')
-        detail += self.describe_flag_group(flags, "ESP: ", 'ESP')
-        detail += self.describe_flag_group(flags, "能力維持: ", 'SUSTAIN_STATUS')
+        detail += self.describe_flag_group(flags, "維持: ", 'SUSTAIN_STATUS')
+        detail += self.describe_flag_group(flags, "感知: ", 'ESP')
         detail += self.describe_flag_group(flags, "", 'POWER')
         detail += self.describe_flag_group(flags, "", 'MISC')
         detail += self.describe_flag_group(flags, "", 'CURSE')
         detail += self.describe_flag_group(flags, "追加: ", 'XTRA')
         detail += self.describe_activation(a_info)
-        detail += "\n\n"
-        detail += f"階層:{a_info['depth']}, 希少度:{a_info['rarity']}, {a_info['weight']/20:.1f}kg, ${a_info['cost']}"
+        detail += "\n"
+        detail += f"階層: {a_info['depth']}, 希少度: {a_info['rarity']}, {a_info['weight']/20:.1f} kg, ${a_info['cost']}"
 
         return (main, detail)
 
@@ -520,7 +520,7 @@ ORDER BY
         return f"{head}" + ", ".join(
             [flag["description"] for flag in flags
              if flag["flag_group"] == group_name]
-        )+"; "
+        )+"\n "
 
     def describe_activation(self, a_info: dict):
         if a_info["activate_flag"] == "NONE":
@@ -529,7 +529,7 @@ ORDER BY
             self.describe_activation_timeout(a_info['timeout'], a_info['dice']) or
             self.describe_activation_timeout_special(a_info['activate_flag'])
         )
-        return f"\n発動した時の効果...\n{a_info['desc']} : {timeout}"
+        return f"\n発動: {a_info['desc']} : {timeout}\n"
 
     def describe_activation_timeout(self, timeout, dice) -> Optional[str]:
         if timeout == 0:
