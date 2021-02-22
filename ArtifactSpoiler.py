@@ -1,322 +1,23 @@
+import asyncio
 import os
-import re
 import sqlite3
 from dataclasses import asdict, dataclass
-from typing import Iterator, List, Optional
+from typing import Optional
 
+import aiohttp
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
+import ActivationInfoReader
+import ArtifactInfoReader
+import FlagInfoReader
+import KindInfoReader
 import ListSearch
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 
 
-@dataclass
-class KindInfo:
-    id: int = None
-    name: str = ""
-    english_name: str = ""
-    tval: int = 0
-    sval: int = 0
-    pval: int = 0
-
-    def is_complete_data(self):
-        return self.id is not None
-
-
-class KindInfoReader:
-    def get_k_info_list(self, k_info_path: str):
-        k_info = KindInfo()
-        with open(k_info_path) as f:
-            lines = f.readlines()
-
-        for line in lines:
-            cols = line.strip().split(":")
-            if len(cols) <= 1:
-                continue
-            if cols[0] == "N":
-                if k_info.is_complete_data():
-                    yield asdict(k_info)
-                    k_info = KindInfo()
-                k_info.id = int(cols[1])
-                k_info.name = cols[2]
-            elif cols[0] == "E":
-                k_info.english_name = cols[1]
-            elif cols[0] == "I":
-                k_info.tval = int(cols[1])
-                k_info.sval = int(cols[2])
-                k_info.pval = int(cols[3])
-
-        if k_info.is_complete_data():
-            yield asdict(k_info)
-
-    def create_k_info_table(self, db_path: str, k_info_path: str):
-        with sqlite3.connect(db_path) as conn:
-            conn.execute("DROP TABLE IF EXISTS k_info")
-            conn.execute(
-                '''
-CREATE TABLE k_info(
-    id INTEGER PRIMARY KEY,
-    name TEXT,
-    english_name TEXT,
-    tval INTEGER,
-    sval INTEGER,
-    pval INTEGER
-)
-'''
-            )
-            conn.executemany(
-                '''
-INSERT INTO k_info values(:id, :name, :english_name, :tval, :sval, :pval)
-''',
-                self.get_k_info_list(k_info_path))
-
-
-@dataclass
-class ArtifactInfo:
-    flags: List[str]
-    id: int = None
-    name: str = ""
-    english_name: str = ""
-    tval: int = 0
-    sval: int = 0
-    pval: int = 0
-    depth: int = 0
-    rarity: int = 0
-    weight: int = 0
-    cost: int = 0
-    base_ac: int = 0
-    base_dam: str = ""
-    to_hit: int = 0
-    to_dam: int = 0
-    to_ac: int = 0
-    activate_flag: str = "NONE"
-
-    def __init__(self):
-        self.flags = []
-
-    def is_complete_data(self):
-        return self.id is not None
-
-    @property
-    def is_melee_weapon(self) -> bool:
-        return 20 <= self.tval and self.tval <= 23
-
-    @property
-    def range_weapon_mult(self) -> int:
-        if self.tval != 19:
-            return 0
-        mult = self.sval % 10  # svalの下1桁を基礎倍率とする仕様
-        if "XTRA_MIGHT" in self.flags:
-            mult += 1
-        return mult
-
-    @property
-    def is_protective_equipment(self):
-        return 30 <= self.tval and self.tval <= 38
-
-    @property
-    def is_armor(self):
-        return 36 <= self.tval and self.tval <= 38
-
-
-class ArtifactInfoReader:
-    def get_a_info_list(self, a_info_path: str):
-        a_info = ArtifactInfo()
-        with open(a_info_path) as f:
-            lines = f.readlines()
-
-        for line in lines:
-            cols = [col.strip() for col in line.split(":")]
-            if len(cols) <= 1:
-                continue
-            if cols[0] == "N":
-                if a_info.is_complete_data():
-                    yield a_info
-                    a_info = ArtifactInfo()
-                a_info.id = int(cols[1])
-                a_info.name = cols[2]
-            elif cols[0] == "E":
-                a_info.english_name = cols[1]
-            elif cols[0] == "I":
-                a_info.tval = int(cols[1])
-                a_info.sval = int(cols[2])
-                a_info.pval = int(cols[3])
-            elif cols[0] == "W":
-                a_info.depth = int(cols[1])
-                a_info.rarity = int(cols[2])
-                a_info.weight = int(cols[3])
-                a_info.cost = int(cols[4])
-            elif cols[0] == "P":
-                a_info.base_ac = int(cols[1])
-                a_info.base_dam = cols[2]
-                a_info.to_hit = int(cols[3])
-                a_info.to_dam = int(cols[4])
-                a_info.to_ac = int(cols[5])
-            elif cols[0] == "F":
-                flags = [flag.strip() for flag in cols[1].split('|') if flag.strip()]
-                a_info.flags.extend(flags)
-            elif cols[0] == "U":
-                a_info.activate_flag = cols[1]
-
-        if a_info.is_complete_data():
-            yield a_info
-
-    def create_a_info_table(self, db_path: str, a_info_path: str):
-        with sqlite3.connect(db_path) as conn:
-            conn.execute("DROP TABLE IF EXISTS a_info")
-            conn.execute("DROP TABLE IF EXISTS a_info_flags")
-            a_info_list = tuple(self.get_a_info_list(a_info_path))
-            conn.execute(
-                '''
-CREATE TABLE a_info(
-    id INTEGER PRIMARY KEY,
-    name TEXT,
-    english_name TEXT,
-    tval INTEGER,
-    sval INTEGER,
-    pval INTEGER,
-    depth INTEGER,
-    rarity INGEGER,
-    weight INGEGER,
-    cost INGEGER,
-    base_ac INGEGER,
-    base_dam TEXT,
-    to_hit INGEGER,
-    to_dam INGEGER,
-    to_ac INGEGER,
-    activate_flag TEXT,
-    is_melee_weapon BOOLEAN,
-    range_weapon_mult INTEGER,
-    is_protective_equipment BOOLEAN,
-    is_armor BOOLEAN
-)
-'''
-            )
-            conn.execute(
-                '''
-CREATE TABLE a_info_flags(
-    id INTEGER,
-    flag TEXT
-)
-'''
-            )
-            for a_info in a_info_list:
-                n = (a_info.is_melee_weapon,
-                     a_info.range_weapon_mult,
-                     a_info.is_protective_equipment,
-                     a_info.is_armor)
-                conn.execute(
-                    f'''
-    INSERT INTO a_info values(
-        :id, :name, :english_name, :tval, :sval, :pval,
-        :depth, :rarity, :weight, :cost,
-        :base_ac, :base_dam, :to_hit, :to_dam, :to_ac,
-        :activate_flag,
-        {a_info.is_melee_weapon}, {a_info.range_weapon_mult}, {a_info.is_protective_equipment}, { a_info.is_armor}
-    )
-'''
-                    .format(n),
-                    asdict(a_info)
-                )
-            for a_info in a_info_list:
-                for flag in a_info.flags:
-                    conn.execute(
-                        '''
-        INSERT INTO a_info_flags values(:id, :flag)
-''',
-                        {'id': a_info.id, 'flag': flag}
-                    )
-
-
-class FlagInfoReader:
-    def get_flag_groups(self, flag_info_path: str):
-        with open(flag_info_path) as f:
-            lines = [line.strip() for line in f.readlines()]
-
-        flag_group = dict()
-        for line in lines:
-            if line.startswith("$GROUP_START"):
-                cols = line.split(":")
-                flag_group["name"] = cols[1]
-                flag_group["description"] = cols[2]
-                flag_group["flags"] = []
-            elif line.startswith("$GROUP_END"):
-                yield flag_group
-            else:
-                cols = line.split(":")
-                if len(cols) == 2:
-                    flag_group["flags"].append({"name": cols[0], "description": cols[1]})
-
-    def create_flag_info_table(self, db_path: str, flag_info_path: str):
-        with sqlite3.connect(db_path) as conn:
-            conn.execute("DROP TABLE IF EXISTS flag_info")
-            conn.execute(
-                '''
-CREATE TABLE flag_info(
-    name TEXT PRIMARY KEY,
-    flag_group TEXT,
-    id_in_group INTEGER,
-    description TEXT
-)
-'''
-            )
-            for flag_group in self.get_flag_groups(flag_info_path):
-                for i, flag in enumerate(flag_group["flags"]):
-                    conn.execute(
-                        '''
-INSERT INTO flag_info VALUES(:name, :flag_group, :id_in_group, :description)
-''',
-                        {"name": flag["name"], "flag_group": flag_group["name"],
-                         "id_in_group": i+1, "description": flag["description"]}
-                    )
-
-
-class ActivationInfoReader():
-    def get_activation_info_list(self, info_table_file: str) -> Iterator[dict]:
-        with open(info_table_file) as f:
-            lines = [line.strip() for line in f.readlines()]
-
-        pattern = re.compile(
-            r'{\s*"(\w+)",\s*(\w+),\s*([-]?\d+)\s*,\s*([-]?\d+)\s*,'
-            r'\s*{\s*([-]?\d+)\s*,\s*([-]?\d+)\s*},\s*_\("(.+)",\s*"(.+)"\)\s*}'
-        )
-        prev_line = None
-        for line in lines:
-            m = pattern.match(prev_line + line) if prev_line else pattern.match(line)
-            if m:
-                yield {"flag": m[1], "level": int(m[3]), "value": int(m[4]), "timeout": int(m[5]), "dice": int(m[6]),
-                       "desc": m[7], "eng_desc": m[8]}
-                prev_line = None
-            else:
-                prev_line = line
-
-        yield {"flag": "NONE", "level": 0, "value": 0, "timeout": 0, "dice": 0,
-               "desc": "なし", "eng_desc": "none"}
-
-    def create_activation_info_table(self, db_path: str, info_table_file: str) -> None:
-        with sqlite3.connect(db_path) as conn:
-            conn.execute("DROP TABLE IF EXISTS activation_info")
-            conn.execute(
-                '''
-CREATE TABLE activation_info(
-    flag TEXT PRIMARY KEY,
-    level INTEGER,
-    value INTEGER,
-    timeout INTEGER,
-    dice INTEGER,
-    desc TEXT,
-    eng_desc TEXT
-)
-''')
-            conn.executemany(
-                '''
-INSERT INTO activation_info VALUES(:flag, :level, :value, :timeout, :dice, :desc, :eng_desc)
-''',
-                self.get_activation_info_list(info_table_file))
-
-
 class ArtifactSpoiler(commands.Cog):
+
     @dataclass
     class Artifact:
         """アーティファクト検索用クラス
@@ -332,19 +33,23 @@ class ArtifactSpoiler(commands.Cog):
     def __init__(self, bot: commands.Command, config: dict):
         self.bot = bot
         self.db_path = os.path.expanduser(config["db_path"])
-        hengband_dir = os.path.expanduser(config["hengband_dir"])
-        k = KindInfoReader()
-        k.create_k_info_table(self.db_path, os.path.join(hengband_dir, "lib/edit/k_info.txt"))
-        a = ArtifactInfoReader()
-        a.create_a_info_table(self.db_path, os.path.join(hengband_dir, "lib/edit/a_info.txt"))
-        ai = ActivationInfoReader()
-        ai.create_activation_info_table(self.db_path, os.path.join(
-            hengband_dir, "src/object-enchant/activation-info-table.c"))
-        f = FlagInfoReader()
+        self.hengband_src_url = config["hengband_src_url"]
+        self.client_session = aiohttp.ClientSession()
+        self.etags = {}
+
+        f = FlagInfoReader.FlagInfoReader()
         f.create_flag_info_table(
             self.db_path,
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "flag_info.txt"))
 
+        self.parser = ErrorCatchingArgumentParser(prog="art", add_help=False)
+        self.parser.add_argument("-e", "--english", action="store_true")
+        self.parser.add_argument("artifact_name")
+
+        self.artifacts = []
+        self.checker_task.start()
+
+    def load_artifacts(self):
         def fullname(art: dict):
             a = art["a_name"]
             k = art["k_name"]
@@ -387,13 +92,7 @@ FROM
 '''
             )
 
-            self.artifacts = \
-                [asdict(self.Artifact(art["id"], fullname(art), fullname_en(art))) for art in c.fetchall()]
-            pass
-
-        self.parser = ErrorCatchingArgumentParser(prog="art", add_help=False)
-        self.parser.add_argument("-e", "--english", action="store_true")
-        self.parser.add_argument("artifact_name")
+            return [asdict(self.Artifact(art["id"], fullname(art), fullname_en(art))) for art in c.fetchall()]
 
     @commands.command(usage="[-e] artifact_name")
     async def art(self, ctx: commands.Context, *args):
@@ -545,6 +244,33 @@ ORDER BY
         DICT = {"TERROR": "3*(レベル+10) ターン毎",
                 "MURAMASA": "確率50%で壊れる"}
         return DICT.get(flag, "不明")
+
+    async def download_file(self, filepath: str) -> Optional[str]:
+        url = self.hengband_src_url + filepath
+        async with self.client_session.get(url, headers={'if-none-match': self.etags.get(filepath, "")}) as res:
+            if res.status != 200:
+                return None
+            self.etags[filepath] = res.headers.get('etag', "")
+            return await res.text()
+
+    @tasks.loop(seconds=300)
+    async def checker_task(self) -> None:
+        file_list = ['lib/edit/a_info.txt', 'lib/edit/k_info.txt', 'src/object-enchant/activation-info-table.c']
+        updaters = [
+            ArtifactInfoReader.ArtifactInfoReader().create_a_info_table,
+            KindInfoReader.KindInfoReader().create_k_info_table,
+            ActivationInfoReader.ActivationInfoReader().create_activation_info_table,
+        ]
+        downloaded_files = await asyncio.gather(*[self.download_file(f) for f in file_list])
+
+        for text, updater in zip(downloaded_files, updaters):
+            if text:
+                updater(self.db_path, text)
+
+        if not any(downloaded_files) or not self.artifacts:
+            # file_listのいずれかのファイルが更新されている、もしくはアーティファクト情報が
+            # 未ロードなら、アーティファクト情報を読み込む
+            self.artifacts = self.load_artifacts()
 
     def output_test(self):
         for art in self.artifacts:
