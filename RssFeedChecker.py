@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import os
@@ -5,6 +6,7 @@ from logging import getLogger
 from operator import attrgetter
 from typing import List
 
+import aiohttp
 import bitlyshortener
 import discord
 import feedparser
@@ -32,9 +34,14 @@ class RssChecker:
         with open(self.record_path, 'w') as f:
             json.dump(self.record, f)
 
-    def get_new_items(self) -> List[FeedParserDict]:
+    async def get_new_items(self, cs: aiohttp.ClientSession, max: int) -> List[FeedParserDict]:
+        async with cs.get(self.url) as res:
+            if res.status != 200:
+                return []
+            body = await res.text()
+
         try:
-            feed = feedparser.parse(self.url)
+            feed = feedparser.parse(body)
         except Exception as e:
             # Feed取得エラー
             getLogger(__name__).warning(e.args)
@@ -53,7 +60,7 @@ class RssChecker:
             new_items.sort(key=attrgetter('last_updated_time'), reverse=True)
             self.record["last_updated_time"] = new_items[0].last_updated_time
             self.__save_record()
-        return new_items
+        return new_items[:max]
 
     def add_last_updated_time(self, d: feedparser.FeedParserDict):
         for i in d.entries:
@@ -79,6 +86,7 @@ class RssCheckCog(commands.Cog):
             checker.send_channel_id = feed["channel_id"]
             self.checkers.append(checker)
 
+        self.client_session = aiohttp.ClientSession()
         self.shortener = bitlyshortener.Shortener(
             tokens=config["bitly_tokens"])
         self.bot = bot
@@ -90,14 +98,15 @@ class RssCheckCog(commands.Cog):
 
     @tasks.loop(seconds=60.0)
     async def checker_task(self):
-        for checker in self.checkers:
-            new_items = checker.get_new_items()[:5]
+        new_items_list = await asyncio.gather(*[c.get_new_items(self.client_session, 5) for c in self.checkers])
+
+        for checker, new_items in zip(self.checkers, new_items_list):
             if len(new_items) == 0:
                 continue
 
             new_item_links = [getattr(i, 'link') for i in new_items]
-            shorten_urls_dict = self.shortener.shorten_urls_to_dict(
-                new_item_links)
+            loop = asyncio.get_running_loop()
+            shorten_urls_dict = await loop.run_in_executor(None, self.shortener.shorten_urls_to_dict, new_item_links)
             channel = self.bot.get_channel(checker.send_channel_id)
             embed = discord.Embed(title=checker.name)
             for i in new_items:
