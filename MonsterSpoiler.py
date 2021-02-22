@@ -13,6 +13,7 @@ class MonsterSpoiler(commands.Cog):
         self.mon_info_url = config["mon_info_url"]
         self.m_info = MonsterInfo.MonsterInfo(os.path.expanduser(config["mon_info_db_path"]))
         self.bot = bot
+        self.mon_info_list = []
 
         self.parser = ErrorCatchingArgumentParser(prog="$mon", add_help=False)
         self.parser.add_argument("-e", "--english", action="store_true")
@@ -62,10 +63,11 @@ class MonsterSpoiler(commands.Cog):
         embed = discord.Embed(title=title, description=description)
         await ctx.reply(embed=embed)
 
-    @tasks.loop(seconds=3600.0)
+    @tasks.loop(seconds=300)
     async def checker_task(self):
-        self.m_info.check_update(self.mon_info_url)
-        self.mon_info_list = self.m_info.get_monster_info_list()
+        updated = await self.m_info.check_update(self.mon_info_url)
+        if updated or not self.mon_info_list:
+            self.mon_info_list = self.m_info.get_monster_info_list()
 
 
 def setup(bot):
