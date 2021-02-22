@@ -2,7 +2,7 @@ import hashlib
 import sqlite3
 from typing import List
 
-import requests
+import aiohttp
 
 import MonsterInfoReader
 
@@ -18,6 +18,7 @@ class MonsterInfo:
             db_path (str): モンスター情報を格納するDBのパス
         """
         self.db_path = db_path
+        self.etag = ""
 
     def get_monster_info_list(self) -> List[dict]:
         """モンスター情報のリストを取得する
@@ -102,7 +103,7 @@ CREATE TABLE mon_info(
 
         return row[0]['hash'] if len(row) > 0 else ""
 
-    def check_update(self, mon_info_txt_url: str) -> bool:
+    async def check_update(self, mon_info_txt_url: str) -> bool:
         """URLからモンスター詳細スポイラーを取得して、必要ならばDBを更新する
 
         Args:
@@ -113,13 +114,18 @@ CREATE TABLE mon_info(
         """
 
         # モンスター詳細スポイラーを指定URLからダウンロード
-        res = requests.get(mon_info_txt_url)
-        if res.status_code != requests.codes.ok:
-            return False
+        async with aiohttp.ClientSession() as client:
+            async with client.get(mon_info_txt_url, headers={'if-none-match': self.etag}) as res:
+                if res.status != 200:
+                    return False
+
+                mon_info = await res.text()
+
+                # 2度目以降用にレスポンスヘッダのetagを記憶
+                self.etag = res.headers.get('etag', "")
 
         # mon-info.txtのMD5キャッシュを計算し、
         # 保持している内容と同じであれば更新は行わない
-        mon_info = res.text
         md5_hash = hashlib.md5(mon_info.encode("utf-8")).hexdigest()
         latest_hash = self.get_current_mon_info_hash()
         if md5_hash == latest_hash:
