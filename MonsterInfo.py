@@ -1,8 +1,8 @@
 import hashlib
-import sqlite3
 from typing import List
 
 import aiohttp
+import aiosqlite
 
 import MonsterInfoReader
 
@@ -20,7 +20,7 @@ class MonsterInfo:
         self.db_path = db_path
         self.etag = ""
 
-    def get_monster_info_list(self) -> List[dict]:
+    async def get_monster_info_list(self) -> List[dict]:
         """モンスター情報のリストを取得する
 
         モンスターのID、日本語名/英語名、ユニークかどうか、シンボル、
@@ -32,20 +32,19 @@ class MonsterInfo:
             List[dict]: モンスター情報のリスト
         """
 
-        with sqlite3.connect(self.db_path) as conn:
-            c = conn.cursor()
-            c.row_factory = sqlite3.Row
-            c.execute(
+        async with aiosqlite.connect(self.db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            async with conn.execute(
                 '''
 SELECT id, name, english_name, is_unique, symbol, level, rarity, speed, hp, ac, exp
     FROM mon_info
 '''
-            )
-            mon_info_list = c.fetchall()
+            ) as c:
+                mon_info_list = await c.fetchall()
 
         return mon_info_list
 
-    def get_monster_detail(self, monster_id: int) -> str:
+    async def get_monster_detail(self, monster_id: int) -> str:
         """モンスターの詳細情報を取得する
 
         Args:
@@ -55,19 +54,19 @@ SELECT id, name, english_name, is_unique, symbol, level, rarity, speed, hp, ac, 
             str: モンスターの詳細情報を表した文字列
         """
 
-        with sqlite3.connect(self.db_path) as conn:
-            c = conn.cursor()
-            c.execute(
-                "SELECT detail FROM mon_info WHERE id = :id",
-                {"id": monster_id})
-            detail = c.fetchone()
+        async with aiosqlite.connect(self.db_path) as conn:
+            async with conn.execute(
+                    "SELECT detail FROM mon_info WHERE id = :id",
+                    {"id": monster_id}) as c:
+                detail = await c.fetchone()
+
         return detail[0] if detail else ""
 
-    def clear_db(self, con: sqlite3.Connection) -> None:
-        con.execute('DROP TABLE IF EXISTS mon_info_file_hash')
-        con.execute('CREATE TABLE mon_info_file_hash(hash TEXT)')
-        con.execute('DROP TABLE IF EXISTS mon_info')
-        con.execute(
+    async def clear_db(self, con: aiosqlite.Connection) -> None:
+        await con.execute('DROP TABLE IF EXISTS mon_info_file_hash')
+        await con.execute('CREATE TABLE mon_info_file_hash(hash TEXT)')
+        await con.execute('DROP TABLE IF EXISTS mon_info')
+        await con.execute(
             '''
 CREATE TABLE mon_info(
     id INTEGER PRIMARY KEY,
@@ -86,18 +85,17 @@ CREATE TABLE mon_info(
 '''
         )
 
-    def get_current_mon_info_hash(self) -> str:
+    async def get_current_mon_info_hash(self) -> str:
         """現在保持しているモンスター情報のハッシュ値を返す
 
         Returns:
             str: 現在保持しているモンスター情報のハッシュ値
         """
         try:
-            with sqlite3.connect(self.db_path) as con:
-                c = con.cursor()
-                c.row_factory = sqlite3.Row
-                c.execute('SELECT hash FROM mon_info_file_hash')
-                row = c.fetchall()
+            async with aiosqlite.connect(self.db_path) as con:
+                con.row_factory = aiosqlite.Row
+                async with con.execute('SELECT hash FROM mon_info_file_hash') as c:
+                    row = await c.fetchall()
         except Exception:
             return ""
 
@@ -127,16 +125,15 @@ CREATE TABLE mon_info(
         # mon-info.txtのMD5キャッシュを計算し、
         # 保持している内容と同じであれば更新は行わない
         md5_hash = hashlib.md5(mon_info.encode("utf-8")).hexdigest()
-        latest_hash = self.get_current_mon_info_hash()
+        latest_hash = await self.get_current_mon_info_hash()
         if md5_hash == latest_hash:
             return False
 
         # DBを更新
         m = MonsterInfoReader.MonsterInfoReader()
-        with sqlite3.connect(self.db_path) as con:
-            self.clear_db(con)
-            c = con.cursor()
-            c.executemany(
+        async with aiosqlite.connect(self.db_path) as con:
+            await self.clear_db(con)
+            await con.executemany(
                 '''
 INSERT INTO mon_info VALUES(
 :id, :name, :english_name, :is_unique, :symbol, :level, :rarity, :speed, :hp, :ac, :exp, :detail
@@ -144,6 +141,7 @@ INSERT INTO mon_info VALUES(
 ''',
                 m.get_mon_info_list(mon_info)
             )
-            c.execute("INSERT INTO mon_info_file_hash VALUES(:hash)", {'hash': md5_hash})
+            await con.execute("INSERT INTO mon_info_file_hash VALUES(:hash)", {'hash': md5_hash})
+            await con.commit()
 
         return True

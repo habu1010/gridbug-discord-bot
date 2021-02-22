@@ -59,7 +59,7 @@ class MonsterSpoiler(commands.Cog):
         title += "{name} / {english_name} ({symbol})".format(**mon_info)
         description = "ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  Exp:{exp}\n\n"\
             .format(**mon_info)
-        description += self.m_info.get_monster_detail(mon_info["id"])
+        description += await self.m_info.get_monster_detail(mon_info["id"])
         embed = discord.Embed(title=title, description=description)
         await ctx.reply(embed=embed)
 
@@ -67,7 +67,7 @@ class MonsterSpoiler(commands.Cog):
     async def checker_task(self):
         updated = await self.m_info.check_update(self.mon_info_url)
         if updated or not self.mon_info_list:
-            self.mon_info_list = self.m_info.get_monster_info_list()
+            self.mon_info_list = await self.m_info.get_monster_info_list()
 
 
 def setup(bot):
