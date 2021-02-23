@@ -129,6 +129,11 @@ CREATE TABLE a_info_flags(
 )
 '''
             )
+            conn.execute(
+                '''
+CREATE INDEX a_info_flags_index_id ON a_info_flags(id)
+'''
+            )
             for a_info in a_info_list:
                 n = (a_info.is_melee_weapon,
                      a_info.range_weapon_mult,
