@@ -1,3 +1,5 @@
+import asyncio
+
 import googletrans
 from discord.ext import commands
 
@@ -38,7 +40,8 @@ class Translator(commands.Cog):
         dest = parse_result.dest or ('ja' if src != 'ja' else 'en')
 
         try:
-            translated = self.translator.translate(text, dest, src)
+            loop = asyncio.get_running_loop()
+            translated = await loop.run_in_executor(None, self.translator.translate, text, dest, src)
             msg = f"[{translated.src} → {translated.dest}] {translated.text}"
             await ctx.reply(msg)
         except Exception as e:
