@@ -55,6 +55,11 @@ CREATE TABLE k_info(
 )
 '''
             )
+            conn.execute(
+                '''
+CREATE INDEX k_info_index_tval_sval ON k_info(tval, sval)
+'''
+            )
             conn.executemany(
                 '''
 INSERT INTO k_info values(:id, :name, :english_name, :tval, :sval, :pval)
