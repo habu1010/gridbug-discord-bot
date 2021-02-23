@@ -12,7 +12,10 @@ class ActivationInfoReader():
         prev_line = None
         for line in info_table_src.splitlines():
             line = line.strip()
-            m = pattern.match(prev_line + line) if prev_line else pattern.match(line)
+            if prev_line:
+                m = pattern.match(prev_line + line)
+            if not prev_line or not m:
+                m = pattern.match(line)
             if m:
                 yield {"flag": m[1], "level": int(m[3]), "value": int(m[4]), "timeout": int(m[5]), "dice": int(m[6]),
                        "desc": m[7], "eng_desc": m[8]}
