@@ -1,10 +1,10 @@
 import asyncio
 import os
-import sqlite3
 from dataclasses import asdict, dataclass
 from typing import Optional
 
 import aiohttp
+import aiosqlite
 import discord
 from discord.ext import commands, tasks
 
@@ -49,7 +49,7 @@ class ArtifactSpoiler(commands.Cog):
         self.artifacts = []
         self.checker_task.start()
 
-    def load_artifacts(self):
+    async def load_artifacts(self):
         def fullname(art: dict):
             a = art["a_name"]
             k = art["k_name"]
@@ -65,10 +65,9 @@ class ArtifactSpoiler(commands.Cog):
             f = a if art["is_fullname"] else f"{k} {a}"
             return f.replace("&", "The").replace("~", "")
 
-        with sqlite3.connect(self.db_path) as conn:
-            c = conn.cursor()
-            c.row_factory = sqlite3.Row
-            c.execute(
+        async with aiosqlite.connect(self.db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            async with conn.execute(
                 '''
 SELECT
     a_info.id AS id,
@@ -90,9 +89,8 @@ FROM
     JOIN k_info ON a_info.tval = k_info.tval
     AND a_info.sval = k_info.sval
 '''
-            )
-
-            return [asdict(self.Artifact(art["id"], fullname(art), fullname_en(art))) for art in c.fetchall()]
+            ) as c:
+                return [asdict(self.Artifact(art["id"], fullname(art), fullname_en(art))) for art in await c.fetchall()]
 
     @commands.command(usage="[-e] artifact_name")
     async def art(self, ctx: commands.Context, *args):
@@ -124,7 +122,7 @@ FROM
             await self.send_error(ctx, error_msg)
 
     async def send_artifact_info(self, ctx: commands.Context, art: Artifact):
-        art_desc = self.describe_artifact(art)
+        art_desc = await self.describe_artifact(art)
         embed = discord.Embed(
             title=discord.utils.escape_markdown(art_desc[0]),
             description=discord.utils.escape_markdown(art_desc[1]))
@@ -134,11 +132,10 @@ FROM
         embed = discord.Embed(title=error_msg, color=discord.Color.red())
         await ctx.reply(embed=embed)
 
-    def describe_artifact(self, art: Artifact):
-        with sqlite3.connect(self.db_path) as conn:
-            c = conn.cursor()
-            c.row_factory = sqlite3.Row
-            c.execute(
+    async def describe_artifact(self, art: Artifact):
+        async with aiosqlite.connect(self.db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            async with conn.execute(
                 '''
 SELECT
     *
@@ -148,23 +145,22 @@ FROM
 WHERE
     a_info.id = :id
 ''',
-                {'id': art["id"]})
-            a_info = c.fetchall()[0]
-            c.execute(
-                f'''
+                    {'id': art["id"]}) as c:
+                a_info = await c.fetchone()
+            flags = await conn.execute_fetchall(
+                '''
 SELECT
     *
 FROM
     a_info_flags
     JOIN flag_info ON a_info_flags.flag = flag_info.name
 WHERE
-    a_info_flags.id = {art['id']}
+    a_info_flags.id = :id
 ORDER BY
     flag_group,
     id_in_group
-'''
-            )
-            flags = c.fetchall()
+''',
+                {'id': art["id"]})
 
         main = f"[{art['id']}] ★{art['fullname']}"
         if a_info["is_melee_weapon"]:
@@ -265,12 +261,13 @@ ORDER BY
 
         for text, updater in zip(downloaded_files, updaters):
             if text:
-                updater(self.db_path, text)
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, updater, self.db_path, text)
 
         if not any(downloaded_files) or not self.artifacts:
             # file_listのいずれかのファイルが更新されている、もしくはアーティファクト情報が
             # 未ロードなら、アーティファクト情報を読み込む
-            self.artifacts = self.load_artifacts()
+            self.artifacts = await self.load_artifacts()
 
     def output_test(self):
         for art in self.artifacts:
