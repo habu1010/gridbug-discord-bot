@@ -264,7 +264,7 @@ ORDER BY
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, updater, self.db_path, text)
 
-        if not any(downloaded_files) or not self.artifacts:
+        if any(downloaded_files) or not self.artifacts:
             # file_listのいずれかのファイルが更新されている、もしくはアーティファクト情報が
             # 未ロードなら、アーティファクト情報を読み込む
             self.artifacts = await self.load_artifacts()
