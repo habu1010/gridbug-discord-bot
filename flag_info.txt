@@ -24,8 +24,11 @@ SLOW_DIGEST:遅消化
 REGEN:急速回復
 LEVITATION:浮遊
 LITE:永久光源(半径1)
+LITE_2:永久光源(半径2)
 LITE_3:永久光源(半径3)
-LITE_M1:暗闇光源
+LITE_M1:暗闇光源(半径1)
+LITE_M2:暗闇光源(半径2)
+LITE_M3:暗闇光源(半径3)
 DEC_MANA:消費魔力減少
 EASY_SPELL:呪文失敗率減少
 WARNING:警告
@@ -117,7 +120,9 @@ ESP_TROLL:トロル
 ESP_GIANT:ジャイアント
 ESP_DRAGON:ドラゴン
 ESP_HUMAN:人間
+ESP_EVIL:邪悪
 ESP_GOOD:善良
+ESP_NONLIVING:無生物
 ESP_UNIQUE:ユニーク
 $GROUP_END
 
