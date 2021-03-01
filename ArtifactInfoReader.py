@@ -1,5 +1,6 @@
 import sqlite3
 from dataclasses import asdict, dataclass
+from logging import getLogger
 from typing import Iterator, List
 
 
@@ -94,7 +95,6 @@ class ArtifactInfoReader:
         with sqlite3.connect(db_path) as conn:
             conn.execute("DROP TABLE IF EXISTS a_info")
             conn.execute("DROP TABLE IF EXISTS a_info_flags")
-            a_info_list = tuple(self.get_a_info_list(a_info_txt))
             conn.execute(
                 '''
 CREATE TABLE a_info(
@@ -134,11 +134,11 @@ CREATE TABLE a_info_flags(
 CREATE INDEX a_info_flags_index_id ON a_info_flags(id)
 '''
             )
-            for a_info in a_info_list:
-                n = (a_info.is_melee_weapon,
-                     a_info.range_weapon_mult,
-                     a_info.is_protective_equipment,
-                     a_info.is_armor)
+
+            a_info_flags = set()
+
+            for a_info in self.get_a_info_list(a_info_txt):
+                a_info_flags.update(a_info.flags)
                 conn.execute(
                     f'''
 INSERT INTO a_info values(
@@ -148,11 +148,10 @@ INSERT INTO a_info values(
     :activate_flag,
     {a_info.is_melee_weapon}, {a_info.range_weapon_mult}, {a_info.is_protective_equipment}, {a_info.is_armor}
 )
-'''
-                    .format(n),
+''',
                     asdict(a_info)
                 )
-            for a_info in a_info_list:
+
                 for flag in a_info.flags:
                     conn.execute(
                         '''
@@ -160,3 +159,9 @@ INSERT INTO a_info_flags values(:id, :flag)
 ''',
                         {'id': a_info.id, 'flag': flag}
                     )
+
+            # flag_info.txt に登録されていないフラグのチェック
+            known_flags = {row[0] for row in conn.execute("SELECT name FROM flag_info").fetchall()}
+            if unknown_flags := a_info_flags - known_flags:
+                unknown_flags_str = ",".join(unknown_flags)
+                getLogger(__name__).warn(f"Unknown flag(s): {unknown_flags_str}")
