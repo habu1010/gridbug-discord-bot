@@ -1,7 +1,6 @@
 import asyncio
 import os
-from dataclasses import asdict, dataclass
-from typing import Optional
+from typing import Dict, List, Optional
 
 import aiohttp
 import aiosqlite
@@ -18,38 +17,22 @@ from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 
 class ArtifactSpoiler(commands.Cog):
 
-    @dataclass
-    class Artifact:
-        """アーティファクト検索用クラス
+    def __init__(self, base_url: str, db_path: str):
+        self.base_url = base_url
+        self.db_path = db_path
+        self.etags: Dict[str, str] = {}
 
-        名前で検索する時に使用するクラス。
-        IDとアーティファクト名だけ持ち、調べるアーティファクトが確定した後にIDでDBを検索する
-
-        """
-        id: int = 0
-        fullname: str = ""
-        fullname_en: str = ""
-
-    def __init__(self, bot: commands.Command, config: dict):
-        self.bot = bot
-        self.db_path = os.path.expanduser(config["db_path"])
-        self.hengband_src_url = config["hengband_src_url"]
-        self.client_session = aiohttp.ClientSession()
-        self.etags = {}
-
-        f = FlagInfoReader.FlagInfoReader()
-        f.create_flag_info_table(
-            self.db_path,
+        FlagInfoReader.FlagInfoReader().create_flag_info_table(
+            db_path,
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "flag_info.txt"))
 
-        self.parser = ErrorCatchingArgumentParser(prog="art", add_help=False)
-        self.parser.add_argument("-e", "--english", action="store_true")
-        self.parser.add_argument("artifact_name")
+        self._artifacts: List[Dict] = []
 
-        self.artifacts = []
-        self.checker_task.start()
+    @property
+    def artifacts(self):
+        return self._artifacts
 
-    async def load_artifacts(self):
+    async def load_artifacts(self) -> List[Dict]:
         def fullname(art: dict):
             a = art["a_name"]
             k = art["k_name"]
@@ -90,49 +73,12 @@ FROM
     AND a_info.sval = k_info.sval
 '''
             ) as c:
-                return [asdict(self.Artifact(art["id"], fullname(art), fullname_en(art))) for art in await c.fetchall()]
+                return [
+                    {"id": art["id"], "fullname": fullname(art), "fullname_en": fullname_en(art)}
+                    for art in await c.fetchall()
+                ]
 
-    @commands.command(usage="[-e] artifact_name")
-    async def art(self, ctx: commands.Context, *args):
-        """アーティファクトを検索する
-
-        アーティファクトを名称の一部で検索し、情報を表示します。
-        複数のアーティファクトが見つかった場合は候補を表示し、リアクションで選択します。
-        一件もヒットしなかった場合は、あいまい検索により候補を表示します。
-
-        positional arguments:
-          artifact_name         検索するアーティファクトの名称の一部
-
-        optional arguments:
-          -e, --english         英語名で検索する
-        """
-
-        try:
-            parse_result = self.parser.parse_args(args)
-        except Exception:
-            await ctx.send_help(ctx.command)
-            return
-
-        choice, error_msg = await ListSearch.search(
-            ctx, self.artifacts, parse_result.artifact_name, "fullname", "fullname_en", parse_result.english)
-
-        if choice:
-            await self.send_artifact_info(ctx, choice)
-        elif error_msg:
-            await self.send_error(ctx, error_msg)
-
-    async def send_artifact_info(self, ctx: commands.Context, art: Artifact):
-        art_desc = await self.describe_artifact(art)
-        embed = discord.Embed(
-            title=discord.utils.escape_markdown(art_desc[0]),
-            description=discord.utils.escape_markdown(art_desc[1]))
-        await ctx.reply(embed=embed)
-
-    async def send_error(self, ctx: commands.Context, error_msg: str):
-        embed = discord.Embed(title=error_msg, color=discord.Color.red())
-        await ctx.reply(embed=embed)
-
-    async def describe_artifact(self, art: Artifact):
+    async def describe_artifact(self, art: Dict):
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
             async with conn.execute(
@@ -241,38 +187,106 @@ ORDER BY
                 "MURAMASA": "確率50%で壊れる"}
         return DICT.get(flag, "不明")
 
-    async def download_file(self, filepath: str) -> Optional[str]:
-        url = self.hengband_src_url + filepath
-        async with self.client_session.get(url, headers={'if-none-match': self.etags.get(filepath, "")}) as res:
+    async def download_file(self, session: aiohttp.ClientSession, filepath: str) -> Optional[str]:
+        url = f"{self.base_url}/{filepath}"
+        async with session.get(url, headers={'if-none-match': self.etags.get(filepath, "")}) as res:
             if res.status != 200:
                 return None
             self.etags[filepath] = res.headers.get('etag', "")
             return await res.text()
 
-    @tasks.loop(seconds=300)
-    async def checker_task(self) -> None:
+    async def check_for_updates(self, session: aiohttp.ClientSession) -> None:
         file_list = ['lib/edit/a_info.txt', 'lib/edit/k_info.txt', 'src/object-enchant/activation-info-table.c']
         updaters = [
             ArtifactInfoReader.ArtifactInfoReader().create_a_info_table,
             KindInfoReader.KindInfoReader().create_k_info_table,
             ActivationInfoReader.ActivationInfoReader().create_activation_info_table,
         ]
-        downloaded_files = await asyncio.gather(*[self.download_file(f) for f in file_list])
+        downloaded_files = await asyncio.gather(*[self.download_file(session, f) for f in file_list])
 
         for text, updater in zip(downloaded_files, updaters):
             if text:
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, updater, self.db_path, text)
 
-        if any(downloaded_files) or not self.artifacts:
+        if any(downloaded_files) or not self._artifacts:
             # file_listのいずれかのファイルが更新されている、もしくはアーティファクト情報が
             # 未ロードなら、アーティファクト情報を読み込む
-            self.artifacts = await self.load_artifacts()
+            self._artifacts = await self.load_artifacts()
 
     def output_test(self):
-        for art in self.artifacts:
+        for art in self._artifacts:
             print(self.describe_artifact(art))
 
 
+class ArtifactSpoilerCog(commands.Cog):
+    BRANCHES = ["master", "develop"]
+
+    def __init__(self, bot: commands.Command, config: dict):
+        self.bot = bot
+
+        self.spoilers: Dict[str, ArtifactSpoiler] = {}
+        for branch in self.BRANCHES:
+            base_url = f"{config['hengband_src_url']}/{branch}"
+            db_path = os.path.join(os.path.expanduser(config["db_dir"]), f"art-info-{branch}.db")
+            self.spoilers[branch] = ArtifactSpoiler(base_url, db_path)
+
+        self.parser = ErrorCatchingArgumentParser(prog="art", add_help=False)
+        self.parser.add_argument("-d", "--develop", action="store_true")
+        self.parser.add_argument("-e", "--english", action="store_true")
+        self.parser.add_argument("artifact_name")
+
+        self.checker_task.start()
+
+    @commands.command(usage="[-e] artifact_name")
+    async def art(self, ctx: commands.Context, *args):
+        """アーティファクトを検索する
+
+        アーティファクトを名称の一部で検索し、情報を表示します。
+        複数のアーティファクトが見つかった場合は候補を表示し、リアクションで選択します。
+        一件もヒットしなかった場合は、あいまい検索により候補を表示します。
+
+        positional arguments:
+          artifact_name         検索するアーティファクトの名称の一部
+
+        optional arguments:
+          -d, --develop         開発(develop)ブランチを検索する
+          -e, --english         英語名で検索する
+        """
+
+        try:
+            parse_result = self.parser.parse_args(args)
+        except Exception:
+            await ctx.send_help(ctx.command)
+            return
+
+        spoiler = self.spoilers["develop"] if parse_result.develop else self.spoilers["master"]
+
+        choice, error_msg = await ListSearch.search(
+            ctx, spoiler.artifacts, parse_result.artifact_name, "fullname", "fullname_en", parse_result.english)
+
+        if choice:
+            await self.send_artifact_info(ctx, spoiler, choice)
+        elif error_msg:
+            await self.send_error(ctx, error_msg)
+
+    async def send_artifact_info(self, ctx: commands.Context, spoiler: ArtifactSpoiler, art: Dict):
+        art_desc = await spoiler.describe_artifact(art)
+        embed = discord.Embed(
+            title=discord.utils.escape_markdown(art_desc[0]),
+            description=discord.utils.escape_markdown(art_desc[1]))
+        await ctx.reply(embed=embed)
+
+    async def send_error(self, ctx: commands.Context, error_msg: str):
+        embed = discord.Embed(title=error_msg, color=discord.Color.red())
+        await ctx.reply(embed=embed)
+
+    @tasks.loop(seconds=300)
+    async def checker_task(self) -> None:
+        async with aiohttp.ClientSession() as session:
+            update_tasks = [spoiler.check_for_updates(session) for spoiler in self.spoilers.values()]
+            await asyncio.gather(*update_tasks)
+
+
 def setup(bot):
-    bot.add_cog(ArtifactSpoiler(bot, bot.ext))
+    bot.add_cog(ArtifactSpoilerCog(bot, bot.ext))
