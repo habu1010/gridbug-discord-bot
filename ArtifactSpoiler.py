@@ -196,7 +196,7 @@ ORDER BY
             return await res.text()
 
     async def check_for_updates(self, session: aiohttp.ClientSession) -> None:
-        file_list = ['lib/edit/a_info.txt', 'lib/edit/k_info.txt', 'src/object-enchant/activation-info-table.c']
+        file_list = ['lib/edit/a_info.txt', 'lib/edit/k_info.txt', 'src/object-enchant/activation-info-table.cpp']
         updaters = [
             ArtifactInfoReader.ArtifactInfoReader().create_a_info_table,
             KindInfoReader.KindInfoReader().create_k_info_table,
