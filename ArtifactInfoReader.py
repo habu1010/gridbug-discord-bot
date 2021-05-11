@@ -39,7 +39,17 @@ class ArtifactInfoReader:
         def range_weapon_mult(self) -> int:
             if self.tval != 19:
                 return 0
-            mult = self.sval % 10  # svalの下1桁を基礎倍率とする仕様
+
+            sval_to_mult = {
+                2: 2,  # スリング
+                12: 2,  # ショート・ボウ
+                13: 3,  # ロング・ボウ
+                23: 3,  # ライト・クロスボウ
+                24: 4,  # ヘヴィ・クロスボウ
+                63: 3,  # いいかげんな弓
+            }
+            mult = sval_to_mult.get(self.sval, 0)
+
             if "XTRA_MIGHT" in self.flags:
                 mult += 1
             return mult
