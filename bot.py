@@ -15,5 +15,7 @@ bot = commands.Bot(['$', '!', '?', '＄', '！', '？'])
 for ext in bot_config.get("extensions"):
     bot.ext = ext
     bot.load_extension(ext["name"])
+    if logging_level := ext.get("logging_level"):
+        logging.getLogger(ext["name"]).setLevel(logging_level)
 
 bot.run(bot_config["token"])
