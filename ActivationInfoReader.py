@@ -6,7 +6,7 @@ from typing import Iterator
 class ActivationInfoReader():
     def get_activation_info_list(self, info_table_src: str) -> Iterator[dict]:
         pattern = re.compile(
-            r'{\s*"(\w+)",\s*(\w+),\s*([-]?\d+)\s*,\s*([-]?\d+)\s*,'
+            r'{\s*"(\w+)",\s*(\S+),\s*([-]?\d+)\s*,\s*([-]?\d+)\s*,'
             r'\s*{\s*([-]?\d+)\s*,\s*([-]?\d+)\s*},\s*_\("(.+)",\s*"(.+)"\)\s*}'
         )
         prev_line = None
