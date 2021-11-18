@@ -127,6 +127,9 @@ HOLD_EXP:経験値維持
 SH_FIRE:火炎オーラ
 SH_ELEC:電気オーラ
 SH_COLD:冷気オーラ
+SELF_FIRE:自傷火炎
+SELF_ELEC:自傷電気
+SELF_COLD:自傷冷気
 NO_TELE:反テレポート
 NO_MAGIC:反魔法
 LEVITATION:浮遊
