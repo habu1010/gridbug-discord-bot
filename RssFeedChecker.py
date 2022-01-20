@@ -95,7 +95,7 @@ class HengscoreRssChecker(RssChecker):
             screen_url = dump_url.replace("show_dump.php?", "show_screen.php?")
             embed.add_field(
                 name=i.title,
-                value=f"[:page_facing_up:dump]({dump_url}) [:camera:screen]({screen_url})"
+                value=f":page_facing_up:[dump]({dump_url}) :camera:[screen]({screen_url})"
             )
 
 
