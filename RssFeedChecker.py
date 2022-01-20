@@ -89,17 +89,13 @@ class PukiwikiRssChecker(RssChecker):
 
 class HengscoreRssChecker(RssChecker):
     async def build_embed(self, embed: discord.Embed, items: List[feedparser.FeedParserDict],
-                          shortener: bitlyshortener.Shortener):
-        new_item_links: List[str] = [getattr(i, 'link') for i in items]
-        new_item_links += [i.replace("show_dump.php?", "show_screen.php?") for i in new_item_links]
-        loop = asyncio.get_running_loop()
-        shorten_urls_dict = await loop.run_in_executor(None, shortener.shorten_urls_to_dict, new_item_links)
+                          _: bitlyshortener.Shortener):
         for i in items:
-            dump_url = shorten_urls_dict.get(i.link, "")
-            screen_url = shorten_urls_dict.get(i.link.replace("show_dump.php?", "show_screen.php?"), "")
+            dump_url = i.link
+            screen_url = dump_url.replace("show_dump.php?", "show_screen.php?")
             embed.add_field(
                 name=i.title,
-                value=f"**dump:**{dump_url}\n**screen:**{screen_url}"
+                value=f"[:page_facing_up:dump]({dump_url}) [:camera:screen]({screen_url})"
             )
 
 
