@@ -7,7 +7,6 @@ from operator import attrgetter
 from typing import List
 
 import aiohttp
-import bitlyshortener
 import discord
 import feedparser
 from discord.ext import commands, tasks
@@ -67,16 +66,10 @@ class RssChecker:
             i.last_updated_time = datetime.datetime(
                 *i.updated_parsed[:6]).timestamp()
 
-    async def build_embed(self, embed: discord.Embed, items: List[feedparser.FeedParserDict],
-                          shortener: bitlyshortener.Shortener):
-        new_item_links = [getattr(i, 'link') for i in items]
-        loop = asyncio.get_running_loop()
-        shorten_urls_dict = await loop.run_in_executor(None, shortener.shorten_urls_to_dict, new_item_links)
-        for i in items:
-            embed.add_field(
-                name=i.title,
-                value=shorten_urls_dict.get(i.link, "")
-            )
+    def build_embed(self, item: feedparser.FeedParserDict) -> discord.Embed:
+        embed = discord.Embed(title=item.title, url=item.link)
+        embed.set_author(name=self.name)
+        return embed
 
 
 class PukiwikiRssChecker(RssChecker):
@@ -88,15 +81,11 @@ class PukiwikiRssChecker(RssChecker):
 
 
 class HengscoreRssChecker(RssChecker):
-    async def build_embed(self, embed: discord.Embed, items: List[feedparser.FeedParserDict],
-                          _: bitlyshortener.Shortener):
-        for i in items:
-            dump_url = i.link
-            screen_url = dump_url.replace("show_dump.php?", "show_screen.php?")
-            embed.add_field(
-                name=i.title,
-                value=f":page_facing_up:[dump]({dump_url}) :camera:[screen]({screen_url})"
-            )
+    def build_embed(self, item: feedparser.FeedParserDict) -> discord.Embed:
+        embed = super().build_embed(item)
+        screen_url = item.link.replace("show_dump.php?", "show_screen.php?")
+        embed.description = f":camera:[screen]({screen_url})"
+        return embed
 
 
 class RssCheckCog(commands.Cog):
@@ -110,8 +99,6 @@ class RssCheckCog(commands.Cog):
             self.checkers.append(checker)
 
         self.client_session = aiohttp.ClientSession()
-        self.shortener = bitlyshortener.Shortener(
-            tokens=config["bitly_tokens"])
         self.bot = bot
 
         self.checker_task.start()
@@ -124,13 +111,9 @@ class RssCheckCog(commands.Cog):
         new_items_list = await asyncio.gather(*[c.get_new_items(self.client_session, 5) for c in self.checkers])
 
         for checker, new_items in zip(self.checkers, new_items_list):
-            if len(new_items) == 0:
-                continue
-
             channel = self.bot.get_channel(checker.send_channel_id)
-            embed = discord.Embed(title=checker.name)
-            await checker.build_embed(embed, new_items, self.shortener)
-            await channel.send(embed=embed)
+            for item in new_items:
+                await channel.send(embed=checker.build_embed(item))
 
     @checker_task.before_loop
     async def before_checker_task(self):
