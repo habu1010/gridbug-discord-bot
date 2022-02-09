@@ -123,6 +123,7 @@ ORDER BY
         detail += self.describe_flag_group(flags, "武器属性: ", 'BRAND')
         detail += self.describe_flag_group(flags, "免疫: ", 'IMMUNITY')
         detail += self.describe_flag_group(flags, "耐性: ", 'RESISTANCE')
+        detail += self.describe_flag_group(flags, "弱点: ", 'VULNERABILITY')
         detail += self.describe_flag_group(flags, "維持: ", 'SUSTAIN_STATUS')
         detail += self.describe_flag_group(flags, "感知: ", 'ESP')
         detail += self.describe_flag_group(flags, "", 'POWER')
