@@ -42,26 +42,24 @@ class MonsterSpoiler(commands.Cog):
             await ctx.send_help(ctx.command)
             return
 
-        choice, error_msg = await ListSearch.search(
-            ctx, self.mon_info_list, parse_result.monster_name, "name", "english_name", parse_result.english)
+        await ListSearch.search(
+            ctx, self.send_mon_info, self.send_error,
+            self.mon_info_list, parse_result.monster_name, "name", "english_name", parse_result.english)
 
-        if choice:
-            await self.send_mon_info(ctx, choice)
-        elif error_msg:
-            await self.send_error(ctx, error_msg)
+    async def create_mon_info_embed(self, mon_info: dict):
+        title = "[U] " if mon_info["is_unique"] else ""
+        title += "{name} / {english_name} ({symbol})".format(**mon_info)
+        description = "ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  Exp:{exp}\n\n"\
+            .format(**mon_info)
+        description += await self.m_info.get_monster_detail(mon_info["id"])
+        return discord.Embed(title=title, description=description)
 
     async def send_error(self, ctx: commands.Context, error_msg: str):
         embed = discord.Embed(title=error_msg, color=discord.Color.red())
         await ctx.reply(embed=embed)
 
     async def send_mon_info(self, ctx: commands.Context, mon_info):
-        title = "[U] " if mon_info["is_unique"] else ""
-        title += "{name} / {english_name} ({symbol})".format(**mon_info)
-        description = "ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  Exp:{exp}\n\n"\
-            .format(**mon_info)
-        description += await self.m_info.get_monster_detail(mon_info["id"])
-        embed = discord.Embed(title=title, description=description)
-        await ctx.reply(embed=embed)
+        await ctx.reply(embed=await self.create_mon_info_embed(mon_info))
 
     @tasks.loop(seconds=300)
     async def checker_task(self):

@@ -261,18 +261,14 @@ class ArtifactSpoilerCog(commands.Cog):
             await ctx.send_help(ctx.command)
             return
 
-        spoiler = self.spoilers["develop"] if parse_result.develop else self.spoilers["master"]
+        ctx.spoiler = self.spoilers["develop"] if parse_result.develop else self.spoilers["master"]
 
-        choice, error_msg = await ListSearch.search(
-            ctx, spoiler.artifacts, parse_result.artifact_name, "fullname", "fullname_en", parse_result.english)
+        await ListSearch.search(
+            ctx, self.send_artifact_info, self.send_error,
+            ctx.spoiler.artifacts, parse_result.artifact_name, "fullname", "fullname_en", parse_result.english)
 
-        if choice:
-            await self.send_artifact_info(ctx, spoiler, choice)
-        elif error_msg:
-            await self.send_error(ctx, error_msg)
-
-    async def send_artifact_info(self, ctx: commands.Context, spoiler: ArtifactSpoiler, art: Dict):
-        art_desc = await spoiler.describe_artifact(art)
+    async def send_artifact_info(self, ctx: commands.Context, art: dict):
+        art_desc = await ctx.spoiler.describe_artifact(art)
         embed = discord.Embed(
             title=discord.utils.escape_markdown(art_desc[0]),
             description=discord.utils.escape_markdown(art_desc[1]))
