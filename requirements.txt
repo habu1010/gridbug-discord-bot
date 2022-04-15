@@ -16,7 +16,7 @@ httpx==0.13.3
 hyperframe==5.2.0
 idna==2.10
 multidict==6.0.2
-py-cord==1.7.3
+py-cord==2.0.0b7
 PyYAML==6.0
 rfc3986==1.5.0
 sgmllib3k==1.0.0
