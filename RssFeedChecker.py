@@ -125,5 +125,5 @@ class RssCheckCog(commands.Cog):
         await self.bot.wait_until_ready()
 
 
-def setup(bot: commands.Bot):
-    bot.add_cog(RssCheckCog(bot, bot.ext))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(RssCheckCog(bot, bot.ext))

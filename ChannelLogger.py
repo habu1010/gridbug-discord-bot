@@ -36,5 +36,5 @@ class ChannelLogger(commands.Cog):
         await self._bot.wait_until_ready()
 
 
-def setup(bot):
-    bot.add_cog(ChannelLogger(bot, bot.ext))
+async def setup(bot):
+    await bot.add_cog(ChannelLogger(bot, bot.ext))

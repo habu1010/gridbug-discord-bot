@@ -81,5 +81,5 @@ ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  E
             self.mon_info_list = await self.m_info.get_monster_info_list()
 
 
-def setup(bot):
-    bot.add_cog(MonsterSpoiler(bot, bot.ext))
+async def setup(bot):
+    await bot.add_cog(MonsterSpoiler(bot, bot.ext))

@@ -53,5 +53,5 @@ class Translator(commands.Cog):
             await ctx.reply(error_msg)
 
 
-def setup(bot):
-    bot.add_cog(Translator(bot))
+async def setup(bot):
+    await bot.add_cog(Translator(bot))

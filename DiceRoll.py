@@ -31,5 +31,5 @@ class DiceRoll(commands.Cog):
         return discord.Embed(title=roll_sum, description=result_seq)
 
 
-def setup(bot):
-    bot.add_cog(DiceRoll())
+async def setup(bot):
+    await bot.add_cog(DiceRoll())

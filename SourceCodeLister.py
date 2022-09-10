@@ -86,5 +86,5 @@ class SourceCodeLister(commands.Cog):
         await ctx.reply(embed=embed)
 
 
-def setup(bot):
-    bot.add_cog(SourceCodeLister(bot, bot.ext))
+async def setup(bot):
+    await bot.add_cog(SourceCodeLister(bot, bot.ext))
