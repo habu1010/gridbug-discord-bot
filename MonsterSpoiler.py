@@ -11,7 +11,9 @@ from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 class MonsterSpoiler(commands.Cog):
     def __init__(self, bot: commands.Bot, config: dict):
         self.mon_info_url = config["mon_info_url"]
-        self.m_info = MonsterInfo.MonsterInfo(os.path.expanduser(config["mon_info_db_path"]))
+        self.m_info = MonsterInfo.MonsterInfo(
+            os.path.expanduser(config["mon_info_db_path"])
+        )
         self.bot = bot
         self.mon_info_list = []
 
@@ -43,14 +45,25 @@ class MonsterSpoiler(commands.Cog):
             return
 
         await ListSearch.search(
-            ctx, self.send_mon_info, self.send_error,
-            self.mon_info_list, parse_result.monster_name, "name", "english_name", parse_result.english)
+            ctx,
+            self.send_mon_info,
+            self.send_error,
+            self.mon_info_list,
+            parse_result.monster_name,
+            "name",
+            "english_name",
+            parse_result.english,
+        )
 
     async def create_mon_info_embed(self, mon_info: dict):
         title = "[U] " if mon_info["is_unique"] else ""
         title += "{name} / {english_name} ({symbol})".format(**mon_info)
-        description = "ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  Exp:{exp}\n\n"\
-            .format(**mon_info)
+        description = """
+ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  Exp:{exp}
+
+""".format(
+            **mon_info
+        )
         description += await self.m_info.get_monster_detail(mon_info["id"])
         return discord.Embed(title=title, description=description)
 

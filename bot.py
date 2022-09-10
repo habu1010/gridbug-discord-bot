@@ -5,16 +5,15 @@ import discord
 import yaml
 from discord.ext import commands
 
-with open(os.path.expanduser('~/.bot-config.yml'), 'r') as f:
+with open(os.path.expanduser("~/.bot-config.yml"), "r") as f:
     bot_config = yaml.full_load(f)
 
-logging.basicConfig(
-    level=bot_config.get('logging_level', 'WARNING'))
+logging.basicConfig(level=bot_config.get("logging_level", "WARNING"))
 
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(['$', '!', '?', '＄', '！', '？'], intents=intents)
+bot = commands.Bot(["$", "!", "?", "＄", "！", "？"], intents=intents)
 
 for ext in bot_config.get("extensions"):
     bot.ext = ext

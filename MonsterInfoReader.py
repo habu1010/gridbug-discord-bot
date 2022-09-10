@@ -21,7 +21,7 @@ class MonsterInfoReader:
         return self.name_lines and self.info_line and self.detail_lines
 
     def push_line(self, line: str):
-        if line.startswith('==='):
+        if line.startswith("==="):
             self.info_line = line
         elif self.info_line:
             self.detail_lines.append(line)
@@ -41,31 +41,32 @@ class MonsterInfoReader:
 
     def parse(self):
         # モンスター名の解析
-        name_line = '\n'.join(self.name_lines)
+        name_line = "\n".join(self.name_lines)
         m = re.match(
-            r"^(\[.\])?\s*(?:(.+)\/)?(.+)\s*\((.+?)\)$", name_line,
-            flags=re.DOTALL)
-        name = m[2].replace('\n', '')
-        english_name = m[3].replace('\n', ' ')
+            r"^(\[.\])?\s*(?:(.+)\/)?(.+)\s*\((.+?)\)$", name_line, flags=re.DOTALL
+        )
+        name = m[2].replace("\n", "")
+        english_name = m[3].replace("\n", " ")
         is_unique = True if m[1] else False
-        symbol = m[4].replace('\n', '')
+        symbol = m[4].replace("\n", "")
 
         # モンスター情報の解析
         m = re.match(
-            r"^=== Num:(\d+)  Lev:(\d+)  Rar:(\d+)  Spd:(.+)  Hp:(.+)  Ac:(\d+)  Exp:(\d+)",
-            self.info_line)
+            r"^=== Num:(\d+)  Lev:(\d+)  Rar:(\d+)  Spd:(.+)  Hp:(.+)  Ac:(\d+)  Exp:(\d+)",  # noqa: E501
+            self.info_line,
+        )
         result = {
-            'id': m[1],
-            'name': name,
-            'english_name': english_name,
-            'is_unique': is_unique,
-            'symbol': symbol,
-            'level': m[2],
-            'rarity': m[3],
-            'speed': m[4],
-            'hp': m[5],
-            'ac': m[6],
-            'exp': m[7],
-            'detail': ''.join(self.detail_lines)
+            "id": m[1],
+            "name": name,
+            "english_name": english_name,
+            "is_unique": is_unique,
+            "symbol": symbol,
+            "level": m[2],
+            "rarity": m[3],
+            "speed": m[4],
+            "hp": m[5],
+            "ac": m[6],
+            "exp": m[7],
+            "detail": "".join(self.detail_lines),
         }
         return result

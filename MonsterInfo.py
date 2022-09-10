@@ -8,8 +8,7 @@ import MonsterInfoReader
 
 
 class MonsterInfo:
-    """モンスター情報クラス
-    """
+    """モンスター情報クラス"""
 
     def __init__(self, db_path: str):
         """モンスター情報クラスのインスタンスを生成する
@@ -35,10 +34,10 @@ class MonsterInfo:
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
             async with conn.execute(
-                '''
+                """
 SELECT id, name, english_name, is_unique, symbol, level, rarity, speed, hp, ac, exp
     FROM mon_info
-'''
+"""
             ) as c:
                 mon_info_list = await c.fetchall()
 
@@ -56,18 +55,18 @@ SELECT id, name, english_name, is_unique, symbol, level, rarity, speed, hp, ac, 
 
         async with aiosqlite.connect(self.db_path) as conn:
             async with conn.execute(
-                    "SELECT detail FROM mon_info WHERE id = :id",
-                    {"id": monster_id}) as c:
+                "SELECT detail FROM mon_info WHERE id = :id", {"id": monster_id}
+            ) as c:
                 detail = await c.fetchone()
 
         return detail[0] if detail else ""
 
     async def clear_db(self, con: aiosqlite.Connection) -> None:
-        await con.execute('DROP TABLE IF EXISTS mon_info_file_hash')
-        await con.execute('CREATE TABLE mon_info_file_hash(hash TEXT)')
-        await con.execute('DROP TABLE IF EXISTS mon_info')
+        await con.execute("DROP TABLE IF EXISTS mon_info_file_hash")
+        await con.execute("CREATE TABLE mon_info_file_hash(hash TEXT)")
+        await con.execute("DROP TABLE IF EXISTS mon_info")
         await con.execute(
-            '''
+            """
 CREATE TABLE mon_info(
     id INTEGER PRIMARY KEY,
     name TEXT,
@@ -82,7 +81,7 @@ CREATE TABLE mon_info(
     exp INTEGER,
     detail TEXT
 )
-'''
+"""
         )
 
     async def get_current_mon_info_hash(self) -> str:
@@ -94,12 +93,12 @@ CREATE TABLE mon_info(
         try:
             async with aiosqlite.connect(self.db_path) as con:
                 con.row_factory = aiosqlite.Row
-                async with con.execute('SELECT hash FROM mon_info_file_hash') as c:
+                async with con.execute("SELECT hash FROM mon_info_file_hash") as c:
                     row = await c.fetchall()
         except Exception:
             return ""
 
-        return row[0]['hash'] if len(row) > 0 else ""
+        return row[0]["hash"] if len(row) > 0 else ""
 
     async def check_update(self, mon_info_txt_url: str) -> bool:
         """URLからモンスター詳細スポイラーを取得して、必要ならばDBを更新する
@@ -113,14 +112,16 @@ CREATE TABLE mon_info(
 
         # モンスター詳細スポイラーを指定URLからダウンロード
         async with aiohttp.ClientSession() as client:
-            async with client.get(mon_info_txt_url, headers={'if-none-match': self.etag}) as res:
+            async with client.get(
+                mon_info_txt_url, headers={"if-none-match": self.etag}
+            ) as res:
                 if res.status != 200:
                     return False
 
                 mon_info = await res.text()
 
                 # 2度目以降用にレスポンスヘッダのetagを記憶
-                self.etag = res.headers.get('etag', "")
+                self.etag = res.headers.get("etag", "")
 
         # mon-info.txtのMD5キャッシュを計算し、
         # 保持している内容と同じであれば更新は行わない
@@ -134,14 +135,17 @@ CREATE TABLE mon_info(
         async with aiosqlite.connect(self.db_path) as con:
             await self.clear_db(con)
             await con.executemany(
-                '''
+                """
 INSERT INTO mon_info VALUES(
-:id, :name, :english_name, :is_unique, :symbol, :level, :rarity, :speed, :hp, :ac, :exp, :detail
+    :id, :name, :english_name, :is_unique, :symbol,
+    :level, :rarity, :speed, :hp, :ac, :exp, :detail
 )
-''',
-                m.get_mon_info_list(mon_info)
+""",
+                m.get_mon_info_list(mon_info),
             )
-            await con.execute("INSERT INTO mon_info_file_hash VALUES(:hash)", {'hash': md5_hash})
+            await con.execute(
+                "INSERT INTO mon_info_file_hash VALUES(:hash)", {"hash": md5_hash}
+            )
             await con.commit()
 
         return True

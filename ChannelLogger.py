@@ -13,7 +13,9 @@ class ChannelLogger(commands.Cog):
 
         logger = logging.getLogger()
         handler = logging.handlers.QueueHandler(self._logging_queue)
-        handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s")
+        )
         logger.addHandler(handler)
 
         self._log_channel_id = bot_config.get("channel_id", "")

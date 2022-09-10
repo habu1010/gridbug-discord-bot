@@ -1,4 +1,4 @@
-from typing import Coroutine, List, Callable, Any
+from typing import Any, Callable, Coroutine, List
 
 import discord
 from discord.ext import commands
@@ -6,8 +6,11 @@ from fuzzywuzzy import fuzz
 
 
 class SelectView(discord.ui.View):
-    def __init__(self, ctx: commands.Context,
-                 on_selected: Callable[[commands.Context, dict], Coroutine[Any, Any, None]]):
+    def __init__(
+        self,
+        ctx: commands.Context,
+        on_selected: Callable[[commands.Context, dict], Coroutine[Any, Any, None]],
+    ):
         super().__init__()
         self.on_selected = on_selected
         self.ctx = ctx
@@ -29,12 +32,15 @@ class SelectButton(discord.ui.Button):
 
 
 async def search(
-        ctx: commands.Context,
-        on_found: Callable[[commands.Context, dict], Coroutine[Any, Any, None]],
-        on_error: Callable[[commands.Context, str], Coroutine[Any, Any, None]],
-        items: List[dict],
-        search_str: str, name_key: str, ename_key: str,
-        english: bool = False) -> None:
+    ctx: commands.Context,
+    on_found: Callable[[commands.Context, dict], Coroutine[Any, Any, None]],
+    on_error: Callable[[commands.Context, str], Coroutine[Any, Any, None]],
+    items: List[dict],
+    search_str: str,
+    name_key: str,
+    ename_key: str,
+    english: bool = False,
+) -> None:
     """リストから検索を行う
 
     リストから、search_strで与えた文字列が、itemsで与えたリストの要素である
@@ -68,7 +74,8 @@ async def search(
     if not candidates:
         suggests = sorted(
             items,
-            key=lambda x: fuzz.partial_ratio(search_str, str.lower(x[name])), reverse=True
+            key=lambda x: fuzz.partial_ratio(search_str, str.lower(x[name])),
+            reverse=True,
         )[:10]
         view = SelectView(ctx, on_found)
         for i in suggests:

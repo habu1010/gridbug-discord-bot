@@ -16,7 +16,6 @@ from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 
 
 class ArtifactSpoiler(commands.Cog):
-
     def __init__(self, base_url: str, db_path: str):
         self.base_url = base_url
         self.db_path = db_path
@@ -24,7 +23,8 @@ class ArtifactSpoiler(commands.Cog):
 
         FlagInfoReader.FlagInfoReader().create_flag_info_table(
             db_path,
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "flag_info.txt"))
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "flag_info.txt"),
+        )
 
         self._artifacts: List[Dict] = []
 
@@ -51,7 +51,7 @@ class ArtifactSpoiler(commands.Cog):
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
             async with conn.execute(
-                '''
+                """
 SELECT
     a_info.id AS id,
     a_info.name AS a_name,
@@ -71,10 +71,14 @@ FROM
     a_info
     JOIN k_info ON a_info.tval = k_info.tval
     AND a_info.sval = k_info.sval
-'''
+"""
             ) as c:
                 return [
-                    {"id": art["id"], "fullname": fullname(art), "fullname_en": fullname_en(art)}
+                    {
+                        "id": art["id"],
+                        "fullname": fullname(art),
+                        "fullname_en": fullname_en(art),
+                    }
                     for art in await c.fetchall()
                 ]
 
@@ -82,7 +86,7 @@ FROM
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
             async with conn.execute(
-                '''
+                """
 SELECT
     *
 FROM
@@ -90,11 +94,12 @@ FROM
     JOIN activation_info ON a_info.activate_flag = activation_info.flag
 WHERE
     a_info.id = :id
-''',
-                    {'id': art["id"]}) as c:
+""",
+                {"id": art["id"]},
+            ) as c:
                 a_info = await c.fetchone()
             flags = await conn.execute_fetchall(
-                '''
+                """
 SELECT
     *
 FROM
@@ -105,8 +110,9 @@ WHERE
 ORDER BY
     flag_group,
     id_in_group
-''',
-                {'id': art["id"]})
+""",
+                {"id": art["id"]},
+            )
 
         main = f"[{art['id']}] ★{art['fullname']}"
         if a_info["is_melee_weapon"]:
@@ -118,18 +124,18 @@ ORDER BY
 
         main += f" / {art['fullname_en']}"
 
-        detail = self.describe_flag_group(flags, f"{a_info['pval']:+}の修正: ", 'BONUS')
-        detail += self.describe_flag_group(flags, "対: ", 'SLAYING')
-        detail += self.describe_flag_group(flags, "武器属性: ", 'BRAND')
-        detail += self.describe_flag_group(flags, "免疫: ", 'IMMUNITY')
-        detail += self.describe_flag_group(flags, "耐性: ", 'RESISTANCE')
-        detail += self.describe_flag_group(flags, "弱点: ", 'VULNERABILITY')
-        detail += self.describe_flag_group(flags, "維持: ", 'SUSTAIN_STATUS')
-        detail += self.describe_flag_group(flags, "感知: ", 'ESP')
-        detail += self.describe_flag_group(flags, "", 'POWER')
-        detail += self.describe_flag_group(flags, "", 'MISC')
-        detail += self.describe_flag_group(flags, "", 'CURSE')
-        detail += self.describe_flag_group(flags, "追加: ", 'XTRA')
+        detail = self.describe_flag_group(flags, f"{a_info['pval']:+}の修正: ", "BONUS")
+        detail += self.describe_flag_group(flags, "対: ", "SLAYING")
+        detail += self.describe_flag_group(flags, "武器属性: ", "BRAND")
+        detail += self.describe_flag_group(flags, "免疫: ", "IMMUNITY")
+        detail += self.describe_flag_group(flags, "耐性: ", "RESISTANCE")
+        detail += self.describe_flag_group(flags, "弱点: ", "VULNERABILITY")
+        detail += self.describe_flag_group(flags, "維持: ", "SUSTAIN_STATUS")
+        detail += self.describe_flag_group(flags, "感知: ", "ESP")
+        detail += self.describe_flag_group(flags, "", "POWER")
+        detail += self.describe_flag_group(flags, "", "MISC")
+        detail += self.describe_flag_group(flags, "", "CURSE")
+        detail += self.describe_flag_group(flags, "追加: ", "XTRA")
         detail += self.describe_activation(a_info)
         detail += "\n"
         detail += f"階層: {a_info['depth']}, 希少度: {a_info['rarity']}, {a_info['weight']/20:.1f} kg, ${a_info['cost']}"
@@ -159,18 +165,24 @@ ORDER BY
     def describe_flag_group(self, flags, head: str, group_name: str):
         if group_name not in [flag["flag_group"] for flag in flags]:
             return ""
-        return f"{head}" + ", ".join(
-            [flag["description"] for flag in flags
-             if flag["flag_group"] == group_name]
-        )+"\n "
+        return (
+            f"{head}"
+            + ", ".join(
+                [
+                    flag["description"]
+                    for flag in flags
+                    if flag["flag_group"] == group_name
+                ]
+            )
+            + "\n "
+        )
 
     def describe_activation(self, a_info: dict):
         if a_info["activate_flag"] == "NONE":
             return ""
-        timeout = (
-            self.describe_activation_timeout(a_info['timeout'], a_info['dice']) or
-            self.describe_activation_timeout_special(a_info['activate_flag'])
-        )
+        timeout = self.describe_activation_timeout(
+            a_info["timeout"], a_info["dice"]
+        ) or self.describe_activation_timeout_special(a_info["activate_flag"])
         return f"\n発動: {a_info['desc']} : {timeout}\n"
 
     def describe_activation_timeout(self, timeout, dice) -> Optional[str]:
@@ -184,26 +196,35 @@ ORDER BY
         return None
 
     def describe_activation_timeout_special(self, flag: str):
-        DICT = {"TERROR": "3*(レベル+10) ターン毎",
-                "MURAMASA": "確率50%で壊れる"}
+        DICT = {"TERROR": "3*(レベル+10) ターン毎", "MURAMASA": "確率50%で壊れる"}
         return DICT.get(flag, "不明")
 
-    async def download_file(self, session: aiohttp.ClientSession, filepath: str) -> Optional[str]:
+    async def download_file(
+        self, session: aiohttp.ClientSession, filepath: str
+    ) -> Optional[str]:
         url = f"{self.base_url}/{filepath}"
-        async with session.get(url, headers={'if-none-match': self.etags.get(filepath, "")}) as res:
+        async with session.get(
+            url, headers={"if-none-match": self.etags.get(filepath, "")}
+        ) as res:
             if res.status != 200:
                 return None
-            self.etags[filepath] = res.headers.get('etag', "")
+            self.etags[filepath] = res.headers.get("etag", "")
             return await res.text()
 
     async def check_for_updates(self, session: aiohttp.ClientSession) -> None:
-        file_list = ['lib/edit/a_info.txt', 'lib/edit/k_info.txt', 'src/object-enchant/activation-info-table.cpp']
+        file_list = [
+            "lib/edit/a_info.txt",
+            "lib/edit/k_info.txt",
+            "src/object-enchant/activation-info-table.cpp",
+        ]
         updaters = [
             ArtifactInfoReader.ArtifactInfoReader().create_a_info_table,
             KindInfoReader.KindInfoReader().create_k_info_table,
             ActivationInfoReader.ActivationInfoReader().create_activation_info_table,
         ]
-        downloaded_files = await asyncio.gather(*[self.download_file(session, f) for f in file_list])
+        downloaded_files = await asyncio.gather(
+            *[self.download_file(session, f) for f in file_list]
+        )
 
         for text, updater in zip(downloaded_files, updaters):
             if text:
@@ -229,7 +250,9 @@ class ArtifactSpoilerCog(commands.Cog):
         self.spoilers: Dict[str, ArtifactSpoiler] = {}
         for branch in self.BRANCHES:
             base_url = f"{config['hengband_src_url']}/{branch}"
-            db_path = os.path.join(os.path.expanduser(config["db_dir"]), f"art-info-{branch}.db")
+            db_path = os.path.join(
+                os.path.expanduser(config["db_dir"]), f"art-info-{branch}.db"
+            )
             self.spoilers[branch] = ArtifactSpoiler(base_url, db_path)
 
         self.parser = ErrorCatchingArgumentParser(prog="art", add_help=False)
@@ -261,17 +284,29 @@ class ArtifactSpoilerCog(commands.Cog):
             await ctx.send_help(ctx.command)
             return
 
-        ctx.spoiler = self.spoilers["develop"] if parse_result.develop else self.spoilers["master"]
+        ctx.spoiler = (
+            self.spoilers["develop"]
+            if parse_result.develop
+            else self.spoilers["master"]
+        )
 
         await ListSearch.search(
-            ctx, self.send_artifact_info, self.send_error,
-            ctx.spoiler.artifacts, parse_result.artifact_name, "fullname", "fullname_en", parse_result.english)
+            ctx,
+            self.send_artifact_info,
+            self.send_error,
+            ctx.spoiler.artifacts,
+            parse_result.artifact_name,
+            "fullname",
+            "fullname_en",
+            parse_result.english,
+        )
 
     async def send_artifact_info(self, ctx: commands.Context, art: dict):
         art_desc = await ctx.spoiler.describe_artifact(art)
         embed = discord.Embed(
             title=discord.utils.escape_markdown(art_desc[0]),
-            description=discord.utils.escape_markdown(art_desc[1]))
+            description=discord.utils.escape_markdown(art_desc[1]),
+        )
         await ctx.reply(embed=embed)
 
     async def send_error(self, ctx: commands.Context, error_msg: str):
@@ -281,7 +316,9 @@ class ArtifactSpoilerCog(commands.Cog):
     @tasks.loop(seconds=300)
     async def checker_task(self) -> None:
         async with aiohttp.ClientSession() as session:
-            update_tasks = [spoiler.check_for_updates(session) for spoiler in self.spoilers.values()]
+            update_tasks = [
+                spoiler.check_for_updates(session) for spoiler in self.spoilers.values()
+            ]
             await asyncio.gather(*update_tasks)
 
 

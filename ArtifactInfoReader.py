@@ -93,7 +93,7 @@ class ArtifactInfoReader:
                 a_info.to_dam = int(cols[4])
                 a_info.to_ac = int(cols[5])
             elif cols[0] == "F":
-                flags = [flag.strip() for flag in cols[1].split('|') if flag.strip()]
+                flags = [flag.strip() for flag in cols[1].split("|") if flag.strip()]
                 a_info.flags.extend(flags)
             elif cols[0] == "U":
                 a_info.activate_flag = cols[1]
@@ -106,7 +106,7 @@ class ArtifactInfoReader:
             conn.execute("DROP TABLE IF EXISTS a_info")
             conn.execute("DROP TABLE IF EXISTS a_info_flags")
             conn.execute(
-                '''
+                """
 CREATE TABLE a_info(
     id INTEGER PRIMARY KEY,
     name TEXT,
@@ -129,20 +129,20 @@ CREATE TABLE a_info(
     is_protective_equipment BOOLEAN,
     is_armor BOOLEAN
 )
-'''
+"""
             )
             conn.execute(
-                '''
+                """
 CREATE TABLE a_info_flags(
     id INTEGER,
     flag TEXT
 )
-'''
+"""
             )
             conn.execute(
-                '''
+                """
 CREATE INDEX a_info_flags_index_id ON a_info_flags(id)
-'''
+"""
             )
 
             a_info_flags = set()
@@ -150,28 +150,33 @@ CREATE INDEX a_info_flags_index_id ON a_info_flags(id)
             for a_info in self.get_a_info_list(a_info_txt):
                 a_info_flags.update(a_info.flags)
                 conn.execute(
-                    f'''
+                    f"""
 INSERT INTO a_info values(
     :id, :name, :english_name, :tval, :sval, :pval,
     :depth, :rarity, :weight, :cost,
     :base_ac, :base_dam, :to_hit, :to_dam, :to_ac,
     :activate_flag,
-    {a_info.is_melee_weapon}, {a_info.range_weapon_mult}, {a_info.is_protective_equipment}, {a_info.is_armor}
+    {a_info.is_melee_weapon},
+    {a_info.range_weapon_mult},
+    {a_info.is_protective_equipment},
+    {a_info.is_armor}
 )
-''',
-                    asdict(a_info)
+""",
+                    asdict(a_info),
                 )
 
                 for flag in a_info.flags:
                     conn.execute(
-                        '''
+                        """
 INSERT INTO a_info_flags values(:id, :flag)
-''',
-                        {'id': a_info.id, 'flag': flag}
+""",
+                        {"id": a_info.id, "flag": flag},
                     )
 
             # flag_info.txt に登録されていないフラグのチェック
-            known_flags = {row[0] for row in conn.execute("SELECT name FROM flag_info").fetchall()}
+            known_flags = {
+                row[0] for row in conn.execute("SELECT name FROM flag_info").fetchall()
+            }
             if unknown_flags := a_info_flags - known_flags:
                 unknown_flags_str = ",".join(unknown_flags)
                 getLogger(__name__).warn(f"Unknown flag(s): {unknown_flags_str}")
