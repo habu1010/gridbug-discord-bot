@@ -6,7 +6,7 @@ Discordの[変愚蛮怒](https://hengband.osdn.jp/)公式ギルドのチャン�
 Description
 ----
 
-gridbbug-discord-botには、以下の機能があります。
+gridbug-discord-botには、以下の機能があります。
 
 - モンスタースポイラー機能 - 変愚蛮怒に出現するモンスターの情報を検索し表示します。
 - アーティファクトスポイラー機能 - 変愚蛮怒に出現する固定アーティファクトの情報を検索し表示します。
