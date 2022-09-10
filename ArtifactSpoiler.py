@@ -322,5 +322,5 @@ class ArtifactSpoilerCog(commands.Cog):
             await asyncio.gather(*update_tasks)
 
 
-def setup(bot):
-    bot.add_cog(ArtifactSpoilerCog(bot, bot.ext))
+async def setup(bot):
+    await bot.add_cog(ArtifactSpoilerCog(bot, bot.ext))

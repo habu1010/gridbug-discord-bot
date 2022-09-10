@@ -4,6 +4,7 @@ async-timeout==3.0.1
 attrs==21.4.0
 certifi==2021.10.8
 chardet==3.0.4
+discord.py==2.1.0
 feedparser==6.0.8
 fuzzywuzzy==0.18.0
 googletrans==4.0.0rc1
@@ -16,7 +17,6 @@ httpx==0.13.3
 hyperframe==5.2.0
 idna==2.10
 multidict==6.0.2
-py-cord==2.0.0b7
 PyYAML==6.0
 rfc3986==1.5.0
 sgmllib3k==1.0.0
