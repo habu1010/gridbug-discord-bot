@@ -47,7 +47,10 @@ class SourceCodeLister(commands.Cog):
                     return
                 src = await res.text()
 
-        display_lines = [f"{i:4}  {l}" for i, l in enumerate(src.splitlines()[start - 1:end], start)]
+        display_lines = [
+            f"{i:4}  {l}"
+            for i, l in enumerate(src.splitlines()[start - 1 : end], start)
+        ]
         if not display_lines:
             await self.send_error(ctx, "指定した行はありません")
             return
