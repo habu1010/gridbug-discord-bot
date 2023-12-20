@@ -3,11 +3,18 @@ import sqlite3
 from typing import Iterator
 
 
+def convert_timeout_to_int(s: str) -> int:
+    try:
+        return int(s)
+    except ValueError:
+        return -1
+
+
 class ActivationInfoReader:
     def get_activation_info_list(self, info_table_src: str) -> Iterator[dict]:
         pattern = re.compile(
             r'{\s*"(\w+)",\s*(\S+),\s*([-]?\d+)\s*,\s*([-]?\d+)\s*,'
-            r'\s*{\s*([-]?\d+)\s*,\s*([-]?\d+)\s*},\s*_\("(.+)",\s*"(.+)"\)\s*}'
+            r'\s*([\w:]+)\s*,\s*([-]?\d+),\s*_\("(.+)",\s*"(.+)"\)\s*}'
         )
         prev_line = None
         for line in info_table_src.splitlines():
@@ -21,7 +28,7 @@ class ActivationInfoReader:
                     "flag": m[1],
                     "level": int(m[3]),
                     "value": int(m[4]),
-                    "timeout": int(m[5]),
+                    "timeout": convert_timeout_to_int(m[5]),
                     "dice": int(m[6]),
                     "desc": m[7],
                     "eng_desc": m[8],
