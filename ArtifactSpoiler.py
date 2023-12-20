@@ -213,8 +213,8 @@ ORDER BY
 
     async def check_for_updates(self, session: aiohttp.ClientSession) -> None:
         file_list = [
-            "lib/edit/a_info.txt",
-            "lib/edit/k_info.txt",
+            "lib/edit/ArtifactDefinitions.txt",
+            "lib/edit/BaseitemDefinitions.txt",
             "src/object-enchant/activation-info-table.cpp",
         ]
         updaters = [
