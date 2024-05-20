@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import logging.handlers
+import queue
 
 import discord
 from discord.ext import commands, tasks
@@ -9,7 +10,7 @@ from discord.ext import commands, tasks
 class ChannelLogger(commands.Cog):
     def __init__(self, bot: commands.Bot, bot_config: dict):
         self._bot = bot
-        self._logging_queue = asyncio.Queue()
+        self._logging_queue: queue.Queue[logging.LogRecord] = queue.Queue()
 
         logger = logging.getLogger()
         handler = logging.handlers.QueueHandler(self._logging_queue)
@@ -18,17 +19,23 @@ class ChannelLogger(commands.Cog):
         )
         logger.addHandler(handler)
 
-        self._log_channel_id = bot_config.get("channel_id", "")
-
+        self._log_channel_id = bot_config.get("channel_id", None)
         self.logger_task.start()
 
     async def send_log(self, log: str):
-        channel: discord.abc.GuildChannel = self._bot.get_channel(self._log_channel_id)
+        if not isinstance(self._log_channel_id, int):
+            return
+
+        channel = self._bot.get_channel(self._log_channel_id)
+        if not isinstance(channel, discord.abc.Messageable):
+            return
+
         await channel.send(f"```{log}```")
 
     @tasks.loop()
     async def logger_task(self) -> None:
-        record: logging.LogRecord = await self._logging_queue.get()
+        loop = asyncio.get_running_loop()
+        record = await loop.run_in_executor(None, lambda: self._logging_queue.get())
         await self.send_log(record.message)
 
     @logger_task.before_loop

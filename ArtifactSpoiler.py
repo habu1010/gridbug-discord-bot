@@ -1,5 +1,6 @@
 import asyncio
 import os
+from collections.abc import Iterable
 from typing import Dict, List, Optional
 
 import aiohttp
@@ -33,7 +34,8 @@ class ArtifactSpoiler(commands.Cog):
         return self._artifacts
 
     async def load_artifacts(self) -> List[Dict]:
-        def fullname(art: dict):
+
+        def fullname(art: aiosqlite.Row):
             a = art["a_name"]
             k = art["k_name"]
             if art["is_fullname"]:
@@ -42,7 +44,7 @@ class ArtifactSpoiler(commands.Cog):
                 return k + a
             return a + k
 
-        def fullname_en(art: dict):
+        def fullname_en(art: aiosqlite.Row):
             a = art["a_name_en"]
             k = art["k_name_en"]
             f = a if art["is_fullname"] else f"{k} {a}"
@@ -115,6 +117,8 @@ ORDER BY
             )
 
         main = f"[{art['id']}] ★{art['fullname']}"
+        if not a_info:
+            return (main, "詳細情報が見つかりませんでした")
         if a_info["is_melee_weapon"]:
             main += f" ({a_info['base_dam']})"
         elif a_info["range_weapon_mult"] > 0:
@@ -138,11 +142,14 @@ ORDER BY
         detail += self.describe_flag_group(flags, "追加: ", "XTRA")
         detail += self.describe_activation(a_info)
         detail += "\n"
-        detail += f"階層: {a_info['depth']}, 希少度: {a_info['rarity']}, {a_info['weight']/20:.1f} kg, ${a_info['cost']}"
+        detail += (
+            f"階層: {a_info['depth']}, 希少度: {a_info['rarity']},"
+            f" {a_info['weight']/20:.1f} kg, ${a_info['cost']}"
+        )
 
         return (main, detail)
 
-    def describe_to_hit_dam(self, a_info: dict):
+    def describe_to_hit_dam(self, a_info: aiosqlite.Row):
         to_hit = a_info["to_hit"]
         to_dam = a_info["to_dam"]
         res = ""
@@ -154,7 +161,7 @@ ORDER BY
                 res += f" ({to_hit:+},{to_dam:+})"
         return res
 
-    def describe_ac(self, a_info: dict):
+    def describe_ac(self, a_info: aiosqlite.Row):
         res = ""
         if a_info["is_protective_equipment"] or a_info["base_ac"] > 0:
             res += f" [{a_info['base_ac']},{a_info['to_ac']:+}]"
@@ -162,7 +169,9 @@ ORDER BY
             res += f" [{a_info['to_ac']:+}]"
         return res
 
-    def describe_flag_group(self, flags, head: str, group_name: str):
+    def describe_flag_group(
+        self, flags: Iterable[aiosqlite.Row], head: str, group_name: str
+    ):
         if group_name not in [flag["flag_group"] for flag in flags]:
             return ""
         return (
@@ -177,7 +186,7 @@ ORDER BY
             + "\n "
         )
 
-    def describe_activation(self, a_info: dict):
+    def describe_activation(self, a_info: aiosqlite.Row):
         if a_info["activate_flag"] == "NONE":
             return ""
         timeout = self.describe_activation_timeout(
@@ -284,7 +293,7 @@ class ArtifactSpoilerCog(commands.Cog):
             await ctx.send_help(ctx.command)
             return
 
-        ctx.spoiler = (
+        spoiler = (
             self.spoilers["develop"]
             if parse_result.develop
             else self.spoilers["master"]
@@ -294,15 +303,18 @@ class ArtifactSpoilerCog(commands.Cog):
             ctx,
             self.send_artifact_info,
             self.send_error,
-            ctx.spoiler.artifacts,
+            spoiler,
+            spoiler.artifacts,
             parse_result.artifact_name,
             "fullname",
             "fullname_en",
             parse_result.english,
         )
 
-    async def send_artifact_info(self, ctx: commands.Context, art: dict):
-        art_desc = await ctx.spoiler.describe_artifact(art)
+    async def send_artifact_info(
+        self, ctx: commands.Context, art: dict, spoiler: ArtifactSpoiler
+    ):
+        art_desc = await spoiler.describe_artifact(art)
         embed = discord.Embed(
             title=discord.utils.escape_markdown(art_desc[0]),
             description=discord.utils.escape_markdown(art_desc[1]),

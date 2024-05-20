@@ -41,7 +41,7 @@ SELECT id, name, english_name, is_unique, symbol, level, rarity, speed, hp, ac, 
             ) as c:
                 mon_info_list = await c.fetchall()
 
-        return mon_info_list
+        return [dict(row) for row in mon_info_list]
 
     async def get_monster_detail(self, monster_id: int) -> str:
         """モンスターの詳細情報を取得する
@@ -94,11 +94,11 @@ CREATE TABLE mon_info(
             async with aiosqlite.connect(self.db_path) as con:
                 con.row_factory = aiosqlite.Row
                 async with con.execute("SELECT hash FROM mon_info_file_hash") as c:
-                    row = await c.fetchall()
+                    row = await c.fetchone()
         except Exception:
             return ""
 
-        return row[0]["hash"] if len(row) > 0 else ""
+        return row["hash"] if row is not None else ""
 
     async def check_update(self, mon_info_txt_url: str) -> bool:
         """URLからモンスター詳細スポイラーを取得して、必要ならばDBを更新する

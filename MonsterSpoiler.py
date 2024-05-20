@@ -48,6 +48,7 @@ class MonsterSpoiler(commands.Cog):
             ctx,
             self.send_mon_info,
             self.send_error,
+            None,
             self.mon_info_list,
             parse_result.monster_name,
             "name",
@@ -71,7 +72,7 @@ ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  E
         embed = discord.Embed(title=error_msg, color=discord.Color.red())
         await ctx.reply(embed=embed)
 
-    async def send_mon_info(self, ctx: commands.Context, mon_info):
+    async def send_mon_info(self, ctx: commands.Context, mon_info, _):
         await ctx.reply(embed=await self.create_mon_info_embed(mon_info))
 
     @tasks.loop(seconds=300)
