@@ -1,18 +1,23 @@
-from typing import Any, Callable, Coroutine, List
+from typing import Any, Callable, Coroutine, List, TypeVar
 
 import discord
 from discord.ext import commands
 from fuzzywuzzy import fuzz
 
+T = TypeVar("T")
+
 
 class SelectView(discord.ui.View):
+
     def __init__(
         self,
         ctx: commands.Context,
-        on_selected: Callable[[commands.Context, dict], Coroutine[Any, Any, None]],
+        on_selected: Callable[[commands.Context, dict, T], Coroutine[Any, Any, None]],
+        callback_arg: T,
     ):
         super().__init__()
         self.on_selected = on_selected
+        self.callback_arg = callback_arg
         self.ctx = ctx
 
 
@@ -22,19 +27,22 @@ class SelectButton(discord.ui.Button):
         self.item = item
 
     async def callback(self, interaction: discord.Interaction):
-        view: SelectView = self.view
-        message_author: discord.Message = view.ctx.message.author
-        if interaction.user.id != message_author.id:
+        if (interaction.message is None) or not isinstance(self.view, SelectView):
+            return
+        if interaction.user.id != self.view.ctx.message.author.id:
             return
 
         await interaction.message.delete()
-        await view.on_selected(self.view.ctx, self.item)
+
+        view = self.view
+        await view.on_selected(view.ctx, self.item, view.callback_arg)
 
 
 async def search(
     ctx: commands.Context,
-    on_found: Callable[[commands.Context, dict], Coroutine[Any, Any, None]],
+    on_found: Callable[[commands.Context, dict, T], Coroutine[Any, Any, None]],
     on_error: Callable[[commands.Context, str], Coroutine[Any, Any, None]],
+    callback_arg: T,
     items: List[dict],
     search_str: str,
     name_key: str,
@@ -77,14 +85,14 @@ async def search(
             key=lambda x: fuzz.partial_ratio(search_str, str.lower(x[name])),
             reverse=True,
         )[:10]
-        view = SelectView(ctx, on_found)
+        view = SelectView(ctx, on_found, callback_arg)
         for i in suggests:
             view.add_item(SelectButton(i, i[name]))
         await ctx.reply("もしかして:", view=view, delete_after=15)
     elif len(candidates) == 1:
-        await on_found(ctx, candidates[0])
+        await on_found(ctx, candidates[0], callback_arg)
     elif len(candidates) <= 10:
-        view = SelectView(ctx, on_found)
+        view = SelectView(ctx, on_found, callback_arg)
         for i in candidates:
             view.add_item(SelectButton(i, i[name]))
         await ctx.reply("候補:", view=view, delete_after=15)

@@ -8,7 +8,7 @@ class ArtifactInfoReader:
     @dataclass
     class ArtifactInfo:
         flags: List[str]
-        id: int = None
+        id: int | None = None
         name: str = ""
         english_name: str = ""
         tval: int = 0

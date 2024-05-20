@@ -6,7 +6,7 @@ from typing import Iterator
 class KindInfoReader:
     @dataclass
     class KindInfo:
-        id: int = None
+        id: int | None = None
         name: str = ""
         english_name: str = ""
         tval: int = 0
