@@ -1,13 +1,15 @@
 import sqlite3
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from logging import getLogger
-from typing import Iterator, List
+from typing import Iterator
+
+from Jsonc import parse_jsonc
 
 
 class ArtifactInfoReader:
     @dataclass
     class ArtifactInfo:
-        flags: List[str]
+        flags: list[str] = field(default_factory=list)
         id: int | None = None
         name: str = ""
         english_name: str = ""
@@ -24,9 +26,6 @@ class ArtifactInfoReader:
         to_dam: int = 0
         to_ac: int = 0
         activate_flag: str = "NONE"
-
-        def __init__(self):
-            self.flags = []
 
         def is_complete_data(self) -> bool:
             return self.id is not None
@@ -63,42 +62,28 @@ class ArtifactInfoReader:
             return 36 <= self.tval and self.tval <= 38
 
     def get_a_info_list(self, a_info_txt: str) -> Iterator[ArtifactInfo]:
-        a_info = ArtifactInfoReader.ArtifactInfo()
+        jsonc = parse_jsonc(a_info_txt)
 
-        for line in a_info_txt.splitlines():
-            cols = [col.strip() for col in line.split(":")]
-            if len(cols) <= 1:
-                continue
-            if cols[0] == "N":
-                if a_info.is_complete_data():
-                    yield a_info
-                    a_info = ArtifactInfoReader.ArtifactInfo()
-                a_info.id = int(cols[1])
-                a_info.name = cols[2]
-            elif cols[0] == "E":
-                a_info.english_name = cols[1]
-            elif cols[0] == "I":
-                a_info.tval = int(cols[1])
-                a_info.sval = int(cols[2])
-                a_info.pval = int(cols[3])
-            elif cols[0] == "W":
-                a_info.depth = int(cols[1])
-                a_info.rarity = int(cols[2])
-                a_info.weight = int(cols[3])
-                a_info.cost = int(cols[4])
-            elif cols[0] == "P":
-                a_info.base_ac = int(cols[1])
-                a_info.base_dam = cols[2]
-                a_info.to_hit = int(cols[3])
-                a_info.to_dam = int(cols[4])
-                a_info.to_ac = int(cols[5])
-            elif cols[0] == "F":
-                flags = [flag.strip() for flag in cols[1].split("|") if flag.strip()]
-                a_info.flags.extend(flags)
-            elif cols[0] == "U":
-                a_info.activate_flag = cols[1]
+        for artifact in jsonc["artifacts"]:
+            a_info = ArtifactInfoReader.ArtifactInfo()
+            a_info.id = artifact["id"]
+            a_info.name = artifact["name"]["ja"]
+            a_info.english_name = artifact["name"]["en"]
+            a_info.tval = artifact["base_item"]["type_value"]
+            a_info.sval = artifact["base_item"]["subtype_value"]
+            a_info.pval = artifact.get("parameter_value", 0)
+            a_info.depth = artifact["level"]
+            a_info.rarity = artifact["rarity"]
+            a_info.weight = artifact["weight"]
+            a_info.cost = artifact["cost"]
+            a_info.base_ac = artifact.get("base_ac", 0)
+            a_info.base_dam = artifact.get("base_dice", "")
+            a_info.to_hit = artifact.get("hit_bonus", 0)
+            a_info.to_dam = artifact.get("damage_bonus", 0)
+            a_info.to_ac = artifact.get("ac_bonus", 0)
+            a_info.flags = artifact.get("flags", [])
+            a_info.activate_flag = artifact.get("activate", "NONE")
 
-        if a_info.is_complete_data():
             yield a_info
 
     def create_a_info_table(self, db_path: str, a_info_txt: str) -> None:

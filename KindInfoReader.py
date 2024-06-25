@@ -2,6 +2,8 @@ import sqlite3
 from dataclasses import asdict, dataclass
 from typing import Iterator
 
+from Jsonc import parse_jsonc
+
 
 class KindInfoReader:
     @dataclass
@@ -17,26 +19,17 @@ class KindInfoReader:
             return self.id is not None
 
     def get_k_info_list(self, k_info_txt: str) -> Iterator[dict]:
-        k_info = KindInfoReader.KindInfo()
+        jsonc = parse_jsonc(k_info_txt)
 
-        for line in k_info_txt.splitlines():
-            cols = line.strip().split(":")
-            if len(cols) <= 1:
-                continue
-            if cols[0] == "N":
-                if k_info.is_complete_data():
-                    yield asdict(k_info)
-                    k_info = KindInfoReader.KindInfo()
-                k_info.id = int(cols[1])
-                k_info.name = cols[2]
-            elif cols[0] == "E":
-                k_info.english_name = cols[1]
-            elif cols[0] == "I":
-                k_info.tval = int(cols[1])
-                k_info.sval = int(cols[2])
-                k_info.pval = int(cols[3])
+        for baseitem in jsonc["baseitems"]:
+            k_info = KindInfoReader.KindInfo()
+            k_info.id = int(baseitem["id"])
+            k_info.name = baseitem["name"]["ja"]
+            k_info.english_name = baseitem["name"]["en"]
+            k_info.tval = baseitem["itemkind"]["type_value"]
+            k_info.sval = baseitem["itemkind"]["subtype_value"]
+            k_info.pval = baseitem["parameter_value"]
 
-        if k_info.is_complete_data():
             yield asdict(k_info)
 
     def create_k_info_table(self, db_path: str, k_info_txt: str) -> None:
