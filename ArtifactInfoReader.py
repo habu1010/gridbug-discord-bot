@@ -164,4 +164,4 @@ INSERT INTO a_info_flags values(:id, :flag)
             }
             if unknown_flags := a_info_flags - known_flags:
                 unknown_flags_str = ",".join(unknown_flags)
-                getLogger(__name__).warn(f"Unknown flag(s): {unknown_flags_str}")
+                getLogger(__name__).warning(f"Unknown flag(s): {unknown_flags_str}")
