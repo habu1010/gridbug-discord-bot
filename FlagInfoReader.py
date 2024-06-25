@@ -1,9 +1,10 @@
 import sqlite3
-from typing import Iterator
+from collections.abc import Iterable
 
 
 class FlagInfoReader:
-    def get_flag_groups(self, flag_info_path: str) -> Iterator[dict]:
+
+    def get_flag_groups(self, flag_info_path: str) -> Iterable[dict]:
         with open(flag_info_path) as f:
             lines = [line.strip() for line in f.readlines()]
 
