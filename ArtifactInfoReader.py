@@ -1,7 +1,7 @@
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
-from typing import Iterator
 
 from Jsonc import parse_jsonc
 
@@ -61,7 +61,7 @@ class ArtifactInfoReader:
         def is_armor(self) -> bool:
             return 36 <= self.tval and self.tval <= 38
 
-    def get_a_info_list(self, a_info_txt: str) -> Iterator[ArtifactInfo]:
+    def get_a_info_list(self, a_info_txt: str) -> Iterable[ArtifactInfo]:
         jsonc = parse_jsonc(a_info_txt)
 
         for artifact in jsonc["artifacts"]:
