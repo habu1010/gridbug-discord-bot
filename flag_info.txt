@@ -153,7 +153,7 @@ XTRA_SHOTS:追加射撃
 BLESSED:祝福
 DEC_MANA:消費魔力減少
 EASY_SPELL:呪文失敗率減少
-HEAVY_SPELL:呪文失敗率増加
+HARD_SPELL:呪文失敗率増加
 EASY2_WEAPON:二刀流向き
 SUPPORTIVE:攻撃補助
 RIDING:乗馬適正
