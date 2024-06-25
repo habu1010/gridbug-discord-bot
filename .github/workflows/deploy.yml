@@ -6,32 +6,29 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Deploy bot
-        uses: easingthemes/ssh-deploy@v2.1.5
-        env:
+      - name: Deploy the bot
+        uses: easingthemes/ssh-deploy@main
+        with:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          ARGS: "-avz --exclude='.git*' --delete"
+          ARGS: "-avz --delete"
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           TARGET: ${{ secrets.REMOTE_TARGET }}
+          EXCLUDE: "/.git/, /.github/"
+          SCRIPT_AFTER: |
+            cd ${{ secrets.REMOTE_TARGET }}
+            cd ..
+            docker compose down
+            docker compose up --build -d
+            docker image prune -f
 
-      - name: Restart bot
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-          REMOTE_USER: ${{ secrets.REMOTE_USER }}
-          BOT_RESTART_COMMAND: ${{ secrets.BOT_RESTART_COMMAND }}
-        run: |
-          echo "${SSH_PRIVATE_KEY}" > secret_key && chmod 600 secret_key
-          ssh -oStrictHostKeyChecking=no -i secret_key ${REMOTE_USER}@${REMOTE_HOST} "${BOT_RESTART_COMMAND}"
-
-      - name: Notify Discord of the result
+      - name: Notify Discord of the deployment results
         uses: sarisia/actions-status-discord@v1
         if: always()
         with:
