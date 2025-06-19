@@ -6,6 +6,7 @@ from discord.ext import commands, tasks
 import ListSearch
 import MonsterInfo
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
+from utils import limit_str_length
 
 
 class MonsterSpoiler(commands.Cog):
@@ -57,8 +58,10 @@ class MonsterSpoiler(commands.Cog):
         )
 
     async def create_mon_info_embed(self, mon_info: dict):
-        title = "[U] " if mon_info["is_unique"] else ""
-        title += "{name} / {english_name} ({symbol})".format(**mon_info)
+        header = "[U] " if mon_info["is_unique"] else ""
+        title = header + "{name} / {english_name} ({symbol})".format(**mon_info)
+        # Discord Embed titleは256文字まで
+        title = limit_str_length(title, 256)
         description = """
 ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  Exp:{exp}
 
