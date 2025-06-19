@@ -4,6 +4,8 @@ import discord
 from discord.ext import commands
 from fuzzywuzzy import fuzz
 
+from utils import limit_str_length
+
 T = TypeVar("T")
 
 
@@ -22,8 +24,13 @@ class SelectView(discord.ui.View):
 
 
 class SelectButton(discord.ui.Button):
+    MAX_LABEL_LENGTH = 80
+
     def __init__(self, item, label: str):
-        super().__init__(label=label, style=discord.ButtonStyle.gray)
+        super().__init__(
+            label=limit_str_length(label, self.MAX_LABEL_LENGTH),
+            style=discord.ButtonStyle.gray,
+        )
         self.item = item
 
     async def callback(self, interaction: discord.Interaction):
