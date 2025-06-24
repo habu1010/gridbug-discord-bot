@@ -86,6 +86,12 @@ async def search(
 
     name = ename_key if english else name_key
 
+    # 完全一致チェック
+    exact_matches = [i for i in candidates if i.get(name, "") == search_str]
+    if len(exact_matches) == 1:
+        await on_found(ctx, exact_matches[0], callback_arg)
+        return
+
     if not candidates:
         suggests = sorted(
             items,
