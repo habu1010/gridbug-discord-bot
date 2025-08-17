@@ -1,6 +1,6 @@
-import json
-import re
 from typing import Any
+
+import json5
 
 
 def parse_jsonc(jsonc_data: str) -> Any:
@@ -14,6 +14,5 @@ def parse_jsonc(jsonc_data: str) -> Any:
     Returns:
         Any: パースした結果のオブジェクト
     """
-    json_data = re.sub(r"/\*[\s\S]*?\*/|//.*", "", jsonc_data)
-    json_obj = json.loads(json_data)
+    json_obj = json5.loads(jsonc_data)
     return json_obj
