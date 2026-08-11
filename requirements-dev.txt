@@ -1,0 +1,10 @@
+# 開発・テスト用の依存パッケージ
+# 本番(Docker)のビルドでは requirements.txt のみを使用する
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+# pytest-asyncio 1.x は typing_extensions>=4.12 を要求し
+# requirements.txt の typing_extensions==4.11.0 と衝突するため 0.24.0 に固定する
+# (それに伴い pytest も 8.x 系に固定)
+pytest==8.3.5
+pytest-asyncio==0.24.0
