@@ -49,7 +49,8 @@ class MonsterInfoReader:
         )
         if m is None:
             return
-        name = m[2].replace("\n", "")
+        # 日本語名は省略されている場合がある
+        name = m[2].replace("\n", "") if m[2] else ""
         english_name = m[3].replace("\n", " ")
         is_unique = True if m[1] else False
         symbol = m[4].replace("\n", "")

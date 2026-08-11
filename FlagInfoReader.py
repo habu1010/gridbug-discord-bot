@@ -12,9 +12,13 @@ class FlagInfoReader:
         for line in lines:
             if line.startswith("$GROUP_START"):
                 cols = line.split(":")
-                flag_group["name"] = cols[1]
-                flag_group["description"] = cols[2]
-                flag_group["flags"] = []
+                # グループ毎に辞書を作り直す (yield した辞書を呼び出し側が
+                # 保持しても、後続のグループの内容で上書きされないようにする)
+                flag_group = {
+                    "name": cols[1],
+                    "description": cols[2],
+                    "flags": [],
+                }
             elif line.startswith("$GROUP_END"):
                 yield flag_group
             else:
