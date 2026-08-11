@@ -6,7 +6,7 @@
 
 import discord
 import pytest
-from conftest import FakeClientSession, FakeResponse
+from conftest import FakeClientSession, FakeResponse, as_bot
 
 import SourceCodeLister
 from SourceCodeLister import SourceCodeLister as Cog
@@ -17,7 +17,7 @@ SRC = "\n".join(f"line{i}" for i in range(1, 51))
 
 @pytest.fixture
 def cog() -> Cog:
-    return Cog(None, {"src_url": SRC_URL})
+    return Cog(as_bot(None), {"src_url": SRC_URL})
 
 
 class Test_parse_display_lines:

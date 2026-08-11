@@ -11,7 +11,7 @@ import os
 
 import feedparser
 import pytest
-from conftest import FakeClientSession, FakeResponse
+from conftest import FakeClientSession, FakeResponse, as_session
 
 from RssFeedChecker import HengscoreRssChecker, PukiwikiRssChecker, RssChecker
 
@@ -86,7 +86,7 @@ class Test_get_new_items:
         checker = make_checker()
         session = FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
 
-        new_items = await checker.get_new_items(session, 5)
+        new_items = await checker.get_new_items(as_session(session), 5)
 
         assert [i.title for i in new_items] == ["記事3", "記事2", "記事1"]
 
@@ -94,7 +94,7 @@ class Test_get_new_items:
         checker = make_checker()
         session = FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
 
-        new_items = await checker.get_new_items(session, 5)
+        new_items = await checker.get_new_items(as_session(session), 5)
 
         times = [i.last_updated_time for i in new_items]
         assert times == sorted(times, reverse=True)
@@ -103,27 +103,27 @@ class Test_get_new_items:
         checker = make_checker()
         session = FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
 
-        new_items = await checker.get_new_items(session, 2)
+        new_items = await checker.get_new_items(as_session(session), 2)
 
         assert [i.title for i in new_items] == ["記事3", "記事2"]
 
     async def test_2回目は新着のみ返る(self):
         checker = make_checker()
         session = FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
-        await checker.get_new_items(session, 5)
+        await checker.get_new_items(as_session(session), 5)
 
         new_item = ("記事4", "https://example.invalid/4", "Thu, 04 Jan 2024 00:00:00 GMT")
         session = FakeClientSession(FakeResponse(200, build_rss(ITEMS + [new_item])))
-        new_items = await checker.get_new_items(session, 5)
+        new_items = await checker.get_new_items(as_session(session), 5)
 
         assert [i.title for i in new_items] == ["記事4"]
 
     async def test_更新がなければ空になる(self):
         checker = make_checker()
         session = FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
-        await checker.get_new_items(session, 5)
+        await checker.get_new_items(as_session(session), 5)
 
-        new_items = await checker.get_new_items(session, 5)
+        new_items = await checker.get_new_items(as_session(session), 5)
 
         assert new_items == []
 
@@ -131,7 +131,7 @@ class Test_get_new_items:
         checker = make_checker()
         session = FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
 
-        await checker.get_new_items(session, 5)
+        await checker.get_new_items(as_session(session), 5)
 
         with open(os.path.join(record_dir, "test.json")) as f:
             saved = json.load(f)
@@ -144,14 +144,14 @@ class Test_get_new_items:
         checker = make_checker()
         session = FakeClientSession(FakeResponse(404))
 
-        assert await checker.get_new_items(session, 5) == []
+        assert await checker.get_new_items(as_session(session), 5) == []
 
     async def test_パースエラーなら空になり警告が出る(self, caplog):
         checker = make_checker()
         session = FakeClientSession(FakeResponse(200, "<rss><不正なXML>"))
 
         with caplog.at_level(logging.WARNING):
-            new_items = await checker.get_new_items(session, 5)
+            new_items = await checker.get_new_items(as_session(session), 5)
 
         assert new_items == []
         assert caplog.records

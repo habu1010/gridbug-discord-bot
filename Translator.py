@@ -1,7 +1,9 @@
 import asyncio
+from typing import cast
 
 import googletrans
 from discord.ext import commands
+from googletrans.models import Detected, Translated
 
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 
@@ -16,7 +18,7 @@ class Translator(commands.Cog):
         self.parser.add_argument("text", nargs="+")
 
     @commands.command(aliases=["trans", "t"], usage="[-d DEST] [-s SRC] text")
-    async def translate(self, ctx: commands.Context, *args):
+    async def translate(self, ctx: commands.Context, *args: str) -> None:
         """Google Translate APIを使用して文章を翻訳します /
         Translate text using the Google Translate API.
 
@@ -38,13 +40,18 @@ class Translator(commands.Cog):
             return
 
         text = " ".join(parse_result.text)
-        src = parse_result.src or self.translator.detect(text).lang
+        # googletrans は引数がリストの場合に結果のリストを返すため戻り値の型が
+        # union に推論される。ここでは常に単一の文字列を渡すのでcastする。
+        src = parse_result.src or cast(Detected, self.translator.detect(text)).lang
         dest = parse_result.dest or ("ja" if src != "ja" else "en")
 
         try:
             loop = asyncio.get_running_loop()
-            translated = await loop.run_in_executor(
-                None, self.translator.translate, text, dest, src
+            translated = cast(
+                Translated,
+                await loop.run_in_executor(
+                    None, self.translator.translate, text, dest, src
+                ),
             )
             msg = f"[{translated.src} → {translated.dest}] {translated.text}"
             await ctx.reply(msg)
@@ -53,5 +60,5 @@ class Translator(commands.Cog):
             await ctx.reply(error_msg)
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Translator(bot))

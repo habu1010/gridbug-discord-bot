@@ -6,12 +6,12 @@ from discord.ext import commands
 
 
 class DiceRoll(commands.Cog):
-    def __init__(self):
+    def __init__(self) -> None:
         self.diceroll_pattern = re.compile(r"^(\d+)[Dd](\d+)$")
         self.rng = random.Random()
 
     @commands.command()
-    async def roll(self, ctx, arg):
+    async def roll(self, ctx: commands.Context, arg: str) -> None:
         m = self.diceroll_pattern.match(arg)
         if m is None:
             return
@@ -19,10 +19,10 @@ class DiceRoll(commands.Cog):
         dice = int(m.group(1))
         side = int(m.group(2))
         if dice > 0 and side > 0:
-            result_msg = self.__roll(dice, side)
+            result_msg = self._roll(dice, side)
             await ctx.reply(embed=result_msg)
 
-    def __roll(self, dice: int, side: int) -> discord.Embed:
+    def _roll(self, dice: int, side: int) -> discord.Embed:
         if dice > 100:
             return discord.Embed(title="振る回数が多すぎます", color=discord.Color.red())
         roll_results = [self.rng.randint(1, side) for _ in range(dice)]
@@ -31,5 +31,5 @@ class DiceRoll(commands.Cog):
         return discord.Embed(title=roll_sum, description=result_seq)
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(DiceRoll())

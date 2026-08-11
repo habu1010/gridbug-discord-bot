@@ -4,6 +4,7 @@
 """
 
 import random
+from typing import Any, cast
 
 import discord
 import pytest
@@ -19,8 +20,16 @@ def cog() -> DiceRoll:
 
 
 def roll(cog: DiceRoll, dice: int, side: int) -> discord.Embed:
-    # __roll は名前修飾されているため修飾後の名前で呼ぶ
-    return cog._DiceRoll__roll(dice, side)
+    return cog._roll(dice, side)
+
+
+async def invoke_roll(cog: DiceRoll, ctx: Any, arg: str) -> None:
+    """$roll コマンドの本体を直接呼ぶ
+
+    Command.callback は「Cogのメソッド」と「単独の関数」のunionとして
+    型付けされており、cog を渡す呼び出しが型エラーになるため cast で落とす。
+    """
+    await cast(Any, DiceRoll.roll.callback)(cog, ctx, arg)
 
 
 class Test_diceroll_pattern:
@@ -58,6 +67,7 @@ class Test_roll:
     def test_出目は1から面数の範囲に収まる(self, cog):
         embed = roll(cog, 100, 6)
 
+        assert embed.description is not None
         values = [int(v) for v in embed.description.strip("[]").split(",")]
         assert len(values) == 100
         assert all(1 <= v <= 6 for v in values)
@@ -82,7 +92,7 @@ class Test_roll:
 
 class Test_rollコマンド:
     async def test_結果が返信される(self, cog, ctx):
-        await DiceRoll.roll.callback(cog, ctx, "2d6")
+        await invoke_roll(cog, ctx, "2d6")
 
         embed = ctx.last_reply["embed"]
         assert embed.title.isdigit()
@@ -90,11 +100,11 @@ class Test_rollコマンド:
 
     @pytest.mark.parametrize("arg", ["abc", "0d6", "2d0"])
     async def test_不正な指定では返信しない(self, cog, ctx, arg):
-        await DiceRoll.roll.callback(cog, ctx, arg)
+        await invoke_roll(cog, ctx, arg)
 
         assert ctx.replies == []
 
     async def test_振る回数が多すぎる場合はエラーが返信される(self, cog, ctx):
-        await DiceRoll.roll.callback(cog, ctx, "101d6")
+        await invoke_roll(cog, ctx, "101d6")
 
         assert ctx.last_reply["embed"].title == "振る回数が多すぎます"

@@ -1,14 +1,15 @@
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterator
+from typing import Any
 
 
 class FlagInfoReader:
 
-    def get_flag_groups(self, flag_info_path: str) -> Iterable[dict]:
+    def get_flag_groups(self, flag_info_path: str) -> Iterator[dict[str, Any]]:
         with open(flag_info_path) as f:
             lines = [line.strip() for line in f.readlines()]
 
-        flag_group = dict()
+        flag_group: dict[str, Any] = dict()
         for line in lines:
             if line.startswith("$GROUP_START"):
                 cols = line.split(":")

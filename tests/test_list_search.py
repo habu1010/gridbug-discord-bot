@@ -8,6 +8,7 @@ discord.ui.View の生成には実行中のイベントループが必要なた�
 
 import discord
 import pytest
+from conftest import as_interaction
 
 import ListSearch
 from ListSearch import SelectButton, SelectView
@@ -53,8 +54,13 @@ async def search(ctx, result, items, search_str, english=False, arg="ARG"):
     )
 
 
-def button_labels(view: discord.ui.View):
-    return [item.label for item in view.children]
+def button_labels(view: discord.ui.View) -> list[str]:
+    # children は Item[View] 型なので、label を持つ Button に絞る
+    return [
+        item.label
+        for item in view.children
+        if isinstance(item, discord.ui.Button) and item.label is not None
+    ]
 
 
 class Test_部分一致検索:
@@ -182,6 +188,7 @@ class Test_SelectButton:
         # Discordのボタンラベルは80文字が上限 (コミット 8d63a2d の回帰テスト)
         button = SelectButton({"name": "x"}, "あ" * 100)
 
+        assert button.label is not None
         assert len(button.label) == 80
         assert button.label.endswith("...")
 
@@ -227,7 +234,7 @@ class Test_ボタンのコールバック:
         view.add_item(button)
         interaction = FakeInteraction(ctx.message.author.id)
 
-        await button.callback(interaction)
+        await button.callback(as_interaction(interaction))
 
         assert interaction.message.deleted is True
         assert result.found[0]["item"] == ITEMS[0]
@@ -239,7 +246,7 @@ class Test_ボタンのコールバック:
         view.add_item(button)
         interaction = FakeInteraction(ctx.message.author.id + 1)
 
-        await button.callback(interaction)
+        await button.callback(as_interaction(interaction))
 
         assert interaction.message.deleted is False
         assert result.found == []
@@ -248,7 +255,7 @@ class Test_ボタンのコールバック:
         button = SelectButton(ITEMS[0], ITEMS[0]["name"])
         interaction = FakeInteraction(ctx.message.author.id)
 
-        await button.callback(interaction)
+        await button.callback(as_interaction(interaction))
 
         assert interaction.message.deleted is False
         assert result.found == []

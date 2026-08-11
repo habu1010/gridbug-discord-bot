@@ -63,7 +63,9 @@ class Test_clear_db:
             await con.commit()
             await m_info.clear_db(con)
             async with con.execute("SELECT COUNT(*) FROM mon_info") as c:
-                count = (await c.fetchone())[0]
+                row = await c.fetchone()
+                assert row is not None
+                count = row[0]
 
         assert count == 0
 

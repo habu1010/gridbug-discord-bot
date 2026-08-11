@@ -1,4 +1,5 @@
-from typing import Any, Callable, Coroutine, List, TypeVar
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import discord
 from discord.ext import commands
@@ -6,15 +7,22 @@ from fuzzywuzzy import fuzz
 
 from utils import limit_str_length
 
-T = TypeVar("T")
+# 検索対象の要素 (名前などのキーを持つ辞書)
+type Item = dict[str, Any]
+
+# 検索完了時に呼ばれるコールバックの型
+type OnFound[T] = Callable[[commands.Context, Item, T], Coroutine[Any, Any, None]]
+
+# 検索エラー時に呼ばれるコールバックの型
+type OnError = Callable[[commands.Context, str], Coroutine[Any, Any, None]]
 
 
-class SelectView(discord.ui.View):
+class SelectView[T](discord.ui.View):
 
     def __init__(
         self,
         ctx: commands.Context,
-        on_selected: Callable[[commands.Context, dict, T], Coroutine[Any, Any, None]],
+        on_selected: OnFound[T],
         callback_arg: T,
     ):
         super().__init__()
@@ -26,14 +34,14 @@ class SelectView(discord.ui.View):
 class SelectButton(discord.ui.Button):
     MAX_LABEL_LENGTH = 80
 
-    def __init__(self, item, label: str):
+    def __init__(self, item: Item, label: str):
         super().__init__(
             label=limit_str_length(label, self.MAX_LABEL_LENGTH),
             style=discord.ButtonStyle.gray,
         )
         self.item = item
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
         if (interaction.message is None) or not isinstance(self.view, SelectView):
             return
         if interaction.user.id != self.view.ctx.message.author.id:
@@ -45,12 +53,12 @@ class SelectButton(discord.ui.Button):
         await view.on_selected(view.ctx, self.item, view.callback_arg)
 
 
-async def search(
+async def search[T](
     ctx: commands.Context,
-    on_found: Callable[[commands.Context, dict, T], Coroutine[Any, Any, None]],
-    on_error: Callable[[commands.Context, str], Coroutine[Any, Any, None]],
+    on_found: OnFound[T],
+    on_error: OnError,
     callback_arg: T,
-    items: List[dict],
+    items: list[Item],
     search_str: str,
     name_key: str,
     ename_key: str,
@@ -70,13 +78,13 @@ async def search(
         ctx (commands.Context): コマンド実行コンテキスト
         on_found: 検索完了時に呼ばれるコールバック
         on_error: 検索エラーが発生した時に呼ばれるコールバック
-        items (List[dict]): 検索を行うリスト
+        items (list[Item]): 検索を行うリスト
         search_str (str): 検索する文字列
         name_key (str): 検索の時に参照する辞書のキー
         ename_key (str): 英語名検索の時に参照する辞書のキー
         english (bool, optional): 英語名検索をする. Defaults to False.
     """
-    candidates = []
+    candidates: list[Item] = []
     matched_key = name_key
 
     if not english:

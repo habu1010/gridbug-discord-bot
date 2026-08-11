@@ -2,13 +2,17 @@ import asyncio
 import logging
 import logging.handlers
 import queue
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord.ext import commands, tasks
 
+if TYPE_CHECKING:
+    from bot import Bot
+
 
 class ChannelLogger(commands.Cog):
-    def __init__(self, bot: commands.Bot, bot_config: dict):
+    def __init__(self, bot: commands.Bot, bot_config: dict[str, Any]):
         self._bot = bot
         self._logging_queue: queue.Queue[logging.LogRecord] = queue.Queue()
 
@@ -22,7 +26,7 @@ class ChannelLogger(commands.Cog):
         self._log_channel_id = bot_config.get("channel_id", None)
         self.logger_task.start()
 
-    async def send_log(self, log: str):
+    async def send_log(self, log: str) -> None:
         if not isinstance(self._log_channel_id, int):
             return
 
@@ -43,5 +47,5 @@ class ChannelLogger(commands.Cog):
         await self._bot.wait_until_ready()
 
 
-async def setup(bot):
+async def setup(bot: "Bot") -> None:
     await bot.add_cog(ChannelLogger(bot, bot.ext))
