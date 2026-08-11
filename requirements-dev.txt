@@ -8,3 +8,7 @@
 # (それに伴い pytest も 8.x 系に固定)
 pytest==8.3.5
 pytest-asyncio==0.24.0
+
+# 型チェッカ。設定は pyrightconfig.json にある。
+# VSCodeのPylanceと同じ結果をCLIで得るために入れているだけで、実行時には不要。
+pyright==1.1.411
