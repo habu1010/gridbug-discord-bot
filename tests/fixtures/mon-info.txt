@@ -1,0 +1,23 @@
+グリッド・バグ/Grid bug (紫の 'I')
+=== Num:16  Lev:1  Rar:1  Spd:+0  Hp:2d3  Ac:12  Exp:1
+小さな紫色のピカピカ光る虫だ。
+それは通常地下 1 階で出現し、通常の速度で動いている。
+
+[U] 農夫マゴット/Farmer Maggot (明るい茶色の 't')
+=== Num:34  Lev:2  Rar:1  Spd:+0  Hp:220  Ac:10  Exp:5
+彼は畑からキノコを取り返そうとしている。
+
+[U] 無敵の恐れ知らずの官能的なる不可思議なる魅惑の頑健なる勤勉なる圧倒的なる華麗な
+る情熱の恐るべき美しき強力なる灰色の王子『強靭なるゾート』/TOUGH ZOTE, the
+INVINCIBLE FEARLESS SENSUAL MYSTERIOUS ENCHANTING VIGOROUS DILIGENT
+OVERWHELMING GORGEOUS PASSIONATE TERRIFYING BEAUTIFUL POWERFUL GREY PRINCE
+(青灰色の 'I')
+=== Num:1259  Lev:76  Rar:3  Spd:+20  Hp:7000  Ac:170  Exp:36500
+ブレッタの夢想とゾートの執着心が生み出した、勇者の幻影。
+
+名前しかない不完全なブロック/Incomplete block (白い 'x')
+
+大ネズミ/Giant rat (白い 'r')
+=== Num:110  Lev:5  Rar:1  Spd:+0  Hp:3d5  Ac:8  Exp:2
+どこにでもいるネズミの親玉だ。
+

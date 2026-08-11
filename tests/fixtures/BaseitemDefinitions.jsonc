@@ -1,0 +1,35 @@
+// テスト用の縮小版 BaseitemDefinitions.jsonc
+{
+    "baseitems": [
+        {
+            "id": 501,
+            "name": { "ja": "の燦光", "en": "& Phial~" },
+            "itemkind": { "type_value": 39, "subtype_value": 4 },
+            "parameter_value": 0,
+        },
+        {
+            "id": 502,
+            "name": { "ja": "ミスリル・チェイン・メイル", "en": "& Mithril Chain Mail~" },
+            "itemkind": { "type_value": 37, "subtype_value": 30 },
+            "parameter_value": 0,
+        },
+        {
+            "id": 503,
+            "name": { "ja": "戦鎚", "en": "& War Hammer~" },
+            "itemkind": { "type_value": 22, "subtype_value": 50 },
+            "parameter_value": 0,
+        },
+        {
+            "id": 504,
+            "name": { "ja": "ロング・ボウ", "en": "& Long Bow~" },
+            "itemkind": { "type_value": 19, "subtype_value": 13 },
+            "parameter_value": 0,
+        },
+        {
+            "id": 505,
+            "name": { "ja": "アミュレット", "en": "& Amulet~" },
+            "itemkind": { "type_value": 40, "subtype_value": 10 },
+            "parameter_value": 0,
+        },
+    ],
+}

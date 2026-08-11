@@ -1,0 +1,76 @@
+// テスト用の縮小版 ArtifactDefinitions.jsonc
+// 本家の書式に合わせてコメントと末尾カンマを含めてある
+{
+    "artifacts": [
+        {
+            // 通常の名前連結 (a_name + k_name) と英語名の & / ~ 置換の確認用
+            "id": 1,
+            "name": { "ja": "ガラドリエル", "en": "of Galadriel" },
+            "base_item": { "type_value": 39, "subtype_value": 4 },
+            "parameter_value": 1,
+            "level": 30,
+            "rarity": 1,
+            "weight": 10,
+            "cost": 10000,
+            "flags": ["RES_LITE", "SEE_INVIS", "ACTIVATE"],
+            "activate": "LIGHT",
+        },
+        {
+            // 『』始まりの名前 (k_name + a_name) / 鎧 / 発動あり
+            "id": 19,
+            "name": { "ja": "『魂の守り手』", "en": "'Soulkeeper'" },
+            "base_item": { "type_value": 37, "subtype_value": 30 },
+            "parameter_value": 2,
+            "level": 75,
+            "rarity": 9,
+            "weight": 420,
+            "cost": 200000,
+            "base_ac": 40,
+            "base_dice": "2d4",
+            "hit_bonus": -4,
+            "damage_bonus": 0,
+            "ac_bonus": 20,
+            "flags": ["CON", "RES_ACID", "RES_FIRE", "HOLD_EXP", "ACTIVATE"],
+            "activate": "CURE_1000",
+        },
+        {
+            // FULL_NAME フラグ持ち (a_name のみ) / 近接武器 / 特殊タイムアウト
+            "id": 96,
+            "name": { "ja": "グロンド", "en": "& Grond" },
+            "base_item": { "type_value": 22, "subtype_value": 50 },
+            "level": 100,
+            "rarity": 100,
+            "weight": 500,
+            "cost": 500000,
+            "base_dice": "3d9",
+            "hit_bonus": 5,
+            "damage_bonus": 25,
+            "flags": ["FULL_NAME", "SLAY_EVIL", "KILL_GOOD", "BRAND_FIRE", "ACTIVATE"],
+            "activate": "TERROR",
+        },
+        {
+            // 射撃武器 (ロング・ボウ + XTRA_MIGHT で倍率 4)
+            "id": 124,
+            "name": { "ja": "『ベルスロンディング』", "en": "'Belthronding'" },
+            "base_item": { "type_value": 19, "subtype_value": 13 },
+            "parameter_value": 20,
+            "level": 90,
+            "rarity": 30,
+            "weight": 40,
+            "cost": 200000,
+            "hit_bonus": 20,
+            "damage_bonus": 22,
+            "flags": ["DEX", "STEALTH", "XTRA_MIGHT"],
+        },
+        {
+            // 任意キーを省略した最小構成 (既定値の確認用 / 発動なし)
+            "id": 200,
+            "name": { "ja": "テストの", "en": "of Test" },
+            "base_item": { "type_value": 40, "subtype_value": 10 },
+            "level": 5,
+            "rarity": 2,
+            "weight": 3,
+            "cost": 100,
+        },
+    ],
+}
