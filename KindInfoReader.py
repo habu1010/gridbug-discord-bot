@@ -36,8 +36,7 @@ class KindInfoReader:
     def create_k_info_table(self, db_path: str, k_info_txt: str) -> None:
         with sqlite3.connect(db_path) as conn:
             conn.execute("DROP TABLE IF EXISTS k_info")
-            conn.execute(
-                """
+            conn.execute("""
 CREATE TABLE k_info(
     id INTEGER PRIMARY KEY,
     name TEXT,
@@ -46,13 +45,10 @@ CREATE TABLE k_info(
     sval INTEGER,
     pval INTEGER
 )
-"""
-            )
-            conn.execute(
-                """
+""")
+            conn.execute("""
 CREATE INDEX k_info_index_tval_sval ON k_info(tval, sval)
-"""
-            )
+""")
             conn.executemany(
                 """
 INSERT INTO k_info values(:id, :name, :english_name, :tval, :sval, :pval)

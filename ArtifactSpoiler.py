@@ -55,8 +55,7 @@ class ArtifactSpoiler(commands.Cog):
 
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
-            async with conn.execute(
-                """
+            async with conn.execute("""
 SELECT
     a_info.id AS id,
     a_info.name AS a_name,
@@ -76,8 +75,7 @@ FROM
     a_info
     JOIN k_info ON a_info.tval = k_info.tval
     AND a_info.sval = k_info.sval
-"""
-            ) as c:
+""") as c:
                 return [
                     {
                         "id": art["id"],

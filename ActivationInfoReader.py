@@ -53,8 +53,7 @@ class ActivationInfoReader:
     def create_activation_info_table(self, db_path: str, info_table_src: str) -> None:
         with sqlite3.connect(db_path) as conn:
             conn.execute("DROP TABLE IF EXISTS activation_info")
-            conn.execute(
-                """
+            conn.execute("""
 CREATE TABLE activation_info(
     flag TEXT PRIMARY KEY,
     level INTEGER,
@@ -64,8 +63,7 @@ CREATE TABLE activation_info(
     desc TEXT,
     eng_desc TEXT
 )
-"""
-            )
+""")
             conn.executemany(
                 """
 INSERT INTO activation_info VALUES(

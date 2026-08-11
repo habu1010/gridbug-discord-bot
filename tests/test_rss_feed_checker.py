@@ -23,16 +23,13 @@ def build_rss(items: list) -> str:
 
     items は (title, link, pubDate) のリスト。
     """
-    entries = "".join(
-        f"""
+    entries = "".join(f"""
     <item>
       <title>{title}</title>
       <link>{link}</link>
       <description>{pub_date}</description>
       <pubDate>{pub_date}</pubDate>
-    </item>"""
-        for title, link, pub_date in items
-    )
+    </item>""" for title, link, pub_date in items)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
@@ -112,7 +109,11 @@ class Test_get_new_items:
         session = FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
         await checker.get_new_items(as_session(session), 5)
 
-        new_item = ("記事4", "https://example.invalid/4", "Thu, 04 Jan 2024 00:00:00 GMT")
+        new_item = (
+            "記事4",
+            "https://example.invalid/4",
+            "Thu, 04 Jan 2024 00:00:00 GMT",
+        )
         session = FakeClientSession(FakeResponse(200, build_rss(ITEMS + [new_item])))
         new_items = await checker.get_new_items(as_session(session), 5)
 

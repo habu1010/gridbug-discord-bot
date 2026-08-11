@@ -33,12 +33,10 @@ class MonsterInfo:
 
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
-            async with conn.execute(
-                """
+            async with conn.execute("""
 SELECT id, name, english_name, is_unique, symbol, level, rarity, speed, hp, ac, exp
     FROM mon_info
-"""
-            ) as c:
+""") as c:
                 mon_info_list = await c.fetchall()
 
         return [dict(row) for row in mon_info_list]
@@ -65,8 +63,7 @@ SELECT id, name, english_name, is_unique, symbol, level, rarity, speed, hp, ac, 
         await con.execute("DROP TABLE IF EXISTS mon_info_file_hash")
         await con.execute("CREATE TABLE mon_info_file_hash(hash TEXT)")
         await con.execute("DROP TABLE IF EXISTS mon_info")
-        await con.execute(
-            """
+        await con.execute("""
 CREATE TABLE mon_info(
     id INTEGER PRIMARY KEY,
     name TEXT,
@@ -81,8 +78,7 @@ CREATE TABLE mon_info(
     exp INTEGER,
     detail TEXT
 )
-"""
-        )
+""")
 
     async def get_current_mon_info_hash(self) -> str:
         """現在保持しているモンスター情報のハッシュ値を返す

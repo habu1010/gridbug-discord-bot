@@ -46,8 +46,7 @@ class Test_get_flag_groups:
 
     def test_グループ説明が空でも読み込める(self):
         groups = {
-            g["name"]: g
-            for g in collect_groups(fixture_path("flag_info_sample.txt"))
+            g["name"]: g for g in collect_groups(fixture_path("flag_info_sample.txt"))
         }
 
         assert groups["POWER"]["description"] == ""
@@ -151,7 +150,9 @@ class Test_実際のflag_info_txt:
     @pytest.mark.parametrize(
         ("group", "prefix"), [("IMMUNITY", "IM_"), ("VULNERABILITY", "VUL_")]
     )
-    def test_免疫と弱点には対応する耐性が定義されている(self, flag_info_db, group, prefix):
+    def test_免疫と弱点には対応する耐性が定義されている(
+        self, flag_info_db, group, prefix
+    ):
         # 属性が追加された時に、耐性側か免疫/弱点側だけになるのを防ぐ
         elements = self.flag_targets(flag_info_db, group, prefix)
         resistances = self.flag_targets(flag_info_db, "RESISTANCE", "RES_")

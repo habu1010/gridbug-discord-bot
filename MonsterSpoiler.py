@@ -69,9 +69,7 @@ class MonsterSpoiler(commands.Cog):
         description = """
 ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  Exp:{exp}
 
-""".format(
-            **mon_info
-        )
+""".format(**mon_info)
         description += await self.m_info.get_monster_detail(mon_info["id"])
         return discord.Embed(title=title, description=description)
 
