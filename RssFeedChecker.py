@@ -105,12 +105,22 @@ class HengscoreRssChecker(RssChecker):
 
 
 class RssCheckCog(commands.Cog):
+    #: 設定の checker: に書ける名前とクラスの対応
+    CHECKER_CLASSES: dict[str, type[RssChecker]] = {
+        c.__name__: c for c in (RssChecker, PukiwikiRssChecker, HengscoreRssChecker)
+    }
+
     def __init__(self, bot: commands.Bot, config: dict[str, Any]):
         self.checkers: list[RssChecker] = []
         for feed in config["feeds"]:
-            checker_class = feed.get("checker", "RssChecker")
-            checker = eval(checker_class)(feed["name"], feed["url"])
-            checker.name = feed["name"]
+            checker_class_name = feed.get("checker", "RssChecker")
+            checker_class = self.CHECKER_CLASSES.get(checker_class_name)
+            if checker_class is None:
+                getLogger(__name__).warning(
+                    f"Unknown RSS checker class: {checker_class_name}"
+                )
+                continue
+            checker = checker_class(feed["name"], feed["url"])
             checker.send_channel_id = feed["channel_id"]
             self.checkers.append(checker)
 
@@ -119,7 +129,7 @@ class RssCheckCog(commands.Cog):
 
         self.checker_task.start()
 
-    def cog_unload(self) -> None:
+    async def cog_unload(self) -> None:
         self.checker_task.cancel()
 
     @tasks.loop(seconds=60.0)
@@ -130,6 +140,8 @@ class RssCheckCog(commands.Cog):
 
         for checker, new_items in zip(self.checkers, new_items_list):
             channel = self.bot.get_channel(checker.send_channel_id)
+            if not isinstance(channel, discord.abc.Messageable):
+                continue
             for item in new_items:
                 await channel.send(embed=checker.build_embed(item))
 
