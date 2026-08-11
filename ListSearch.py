@@ -77,17 +77,25 @@ async def search(
         english (bool, optional): 英語名検索をする. Defaults to False.
     """
     candidates = []
+    matched_key = name_key
 
     if not english:
         candidates = [i for i in items if search_str in i[name_key]]
     if not candidates:
+        matched_key = ename_key
         search_str = search_str.lower()
         candidates = [i for i in items if search_str in str.lower(i[ename_key])]
 
     name = ename_key if english else name_key
 
     # 完全一致チェック
-    exact_matches = [i for i in candidates if i.get(name, "") == search_str]
+    # 実際に部分一致したキーを、検索文字列と同じく小文字化して比較する
+    # (英語名検索では search_str が小文字化されているため)
+    exact_matches = [
+        i
+        for i in candidates
+        if str.lower(i.get(matched_key, "")) == str.lower(search_str)
+    ]
     if len(exact_matches) == 1:
         await on_found(ctx, exact_matches[0], callback_arg)
         return

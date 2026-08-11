@@ -59,8 +59,9 @@ class SourceCodeLister(commands.Cog):
         await ctx.reply(msg)
 
     def parse_display_lines(self, display_lines: str) -> tuple:
-        m = re.match(r"^(\d*)(-?)(\d*)", display_lines)
-        if not m:
+        m = re.fullmatch(r"(\d*)(-?)(\d*)", display_lines)
+        if not m or (not m[1] and not m[3]):
+            # 数字を全く含まない指定は解釈できない
             return (None, None)
 
         if m[1] and m[2] and m[3]:
