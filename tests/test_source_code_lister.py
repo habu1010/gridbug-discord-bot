@@ -37,9 +37,7 @@ class Test_parse_display_lines:
     def test_行指定の解釈(self, cog, display_lines, expected):
         assert cog.parse_display_lines(display_lines) == expected
 
-    @pytest.mark.parametrize(
-        "display_lines", ["abc", "", "-", "10abc", "abc10", "1.5"]
-    )
+    @pytest.mark.parametrize("display_lines", ["abc", "", "-", "10abc", "abc10", "1.5"])
     def test_解釈できない指定はNoneを返す(self, cog, display_lines):
         # 呼び出し側は start が偽であればヘルプを表示する
         assert cog.parse_display_lines(display_lines) == (None, None)

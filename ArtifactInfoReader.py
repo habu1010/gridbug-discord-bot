@@ -90,8 +90,7 @@ class ArtifactInfoReader:
         with sqlite3.connect(db_path) as conn:
             conn.execute("DROP TABLE IF EXISTS a_info")
             conn.execute("DROP TABLE IF EXISTS a_info_flags")
-            conn.execute(
-                """
+            conn.execute("""
 CREATE TABLE a_info(
     id INTEGER PRIMARY KEY,
     name TEXT,
@@ -114,21 +113,16 @@ CREATE TABLE a_info(
     is_protective_equipment BOOLEAN,
     is_armor BOOLEAN
 )
-"""
-            )
-            conn.execute(
-                """
+""")
+            conn.execute("""
 CREATE TABLE a_info_flags(
     id INTEGER,
     flag TEXT
 )
-"""
-            )
-            conn.execute(
-                """
+""")
+            conn.execute("""
 CREATE INDEX a_info_flags_index_id ON a_info_flags(id)
-"""
-            )
+""")
 
             a_info_flags = set()
 

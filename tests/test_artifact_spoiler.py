@@ -129,21 +129,29 @@ class Test_describe_activation:
         assert spoiler.describe_activation(row) == "\n発動: 太陽光線 : 10 ターン毎\n"
 
     def test_ダイスありはダイス付きで表示する(self, spoiler):
-        row = a_info(activate_flag="LIGHT", timeout=10, dice=10, desc="イルミネーション")
+        row = a_info(
+            activate_flag="LIGHT", timeout=10, dice=10, desc="イルミネーション"
+        )
 
         assert (
-            spoiler.describe_activation(row) == "\n発動: イルミネーション : 10+d10 ターン毎\n"
+            spoiler.describe_activation(row)
+            == "\n発動: イルミネーション : 10+d10 ターン毎\n"
         )
 
     def test_TERRORは特殊なタイムアウト表記になる(self, spoiler):
         row = a_info(activate_flag="TERROR", timeout=-1, dice=0, desc="恐慌")
 
-        assert spoiler.describe_activation(row) == "\n発動: 恐慌 : 3*(レベル+10) ターン毎\n"
+        assert (
+            spoiler.describe_activation(row)
+            == "\n発動: 恐慌 : 3*(レベル+10) ターン毎\n"
+        )
 
     def test_MURAMASAは特殊なタイムアウト表記になる(self, spoiler):
         row = a_info(activate_flag="MURAMASA", timeout=-1, dice=0, desc="腕力上昇")
 
-        assert spoiler.describe_activation(row) == "\n発動: 腕力上昇 : 確率50%で壊れる\n"
+        assert (
+            spoiler.describe_activation(row) == "\n発動: 腕力上昇 : 確率50%で壊れる\n"
+        )
 
     def test_未知の特殊タイムアウトは不明(self, spoiler):
         row = a_info(activate_flag="NEW_SPECIAL", timeout=-1, dice=0, desc="何か")
@@ -169,7 +177,9 @@ class Test_describe_activation_timeout:
             spoiler.describe_activation_timeout_special("TERROR")
             == "3*(レベル+10) ターン毎"
         )
-        assert spoiler.describe_activation_timeout_special("MURAMASA") == "確率50%で壊れる"
+        assert (
+            spoiler.describe_activation_timeout_special("MURAMASA") == "確率50%で壊れる"
+        )
         assert spoiler.describe_activation_timeout_special("UNKNOWN") == "不明"
 
 
@@ -229,7 +239,10 @@ class Test_describe_artifact:
         main, detail = await spoiler.describe_artifact(art)
 
         # XTRA_MIGHT 付きロング・ボウなので x4
-        assert main == "[124] ★ロング・ボウ『ベルスロンディング』 (x4) (+20,+22) / The Long Bow 'Belthronding'"  # noqa: E501
+        assert (
+            main
+            == "[124] ★ロング・ボウ『ベルスロンディング』 (x4) (+20,+22) / The Long Bow 'Belthronding'"
+        )  # noqa: E501
         assert detail.startswith("+20の修正: 器用, 隠密")
 
     async def test_鎧はACを表示する(self, spoiler):
@@ -237,7 +250,9 @@ class Test_describe_artifact:
 
         main, detail = await spoiler.describe_artifact(art)
 
-        assert main.startswith("[19] ★ミスリル・チェイン・メイル『魂の守り手』 (-4) [40,+20]")
+        assert main.startswith(
+            "[19] ★ミスリル・チェイン・メイル『魂の守り手』 (-4) [40,+20]"
+        )
         assert "+2の修正: 耐久" in detail
         assert "耐性: 酸, 火炎" in detail
         assert "経験値維持" in detail
@@ -265,7 +280,11 @@ class Test_describe_artifact:
 
         _, detail = await spoiler.describe_artifact(art)
 
-        assert detail.index("+2の修正") < detail.index("耐性:") < detail.index("経験値維持")
+        assert (
+            detail.index("+2の修正")
+            < detail.index("耐性:")
+            < detail.index("経験値維持")
+        )
 
     async def test_詳細が見つからない場合はメッセージを返す(self, spoiler):
         main, detail = await spoiler.describe_artifact(

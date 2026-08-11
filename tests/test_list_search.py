@@ -118,7 +118,9 @@ class Test_英語名検索:
         assert button_labels(ctx.last_reply["view"]) == ["Grid bug", "Giant grid bug"]
 
     @pytest.mark.parametrize("search_str", ["grid bug", "Grid bug", "GRID BUG"])
-    async def test_英語名の完全一致は大文字小文字を区別しない(self, ctx, result, search_str):
+    async def test_英語名の完全一致は大文字小文字を区別しない(
+        self, ctx, result, search_str
+    ):
         # 部分一致では2件ヒットするが、完全一致する候補があればそれを選ぶ
         await search(ctx, result, ITEMS, search_str, english=True)
 
@@ -146,14 +148,18 @@ class Test_英語名検索:
 
 class Test_候補が多い場合:
     async def test_10件までは候補をボタンで表示する(self, ctx, result):
-        items = [{"name": f"モンスター{i}", "english_name": f"mon{i}"} for i in range(10)]
+        items = [
+            {"name": f"モンスター{i}", "english_name": f"mon{i}"} for i in range(10)
+        ]
 
         await search(ctx, result, items, "モンスター")
 
         assert len(ctx.last_reply["view"].children) == 10
 
     async def test_11件以上はエラーになる(self, ctx, result):
-        items = [{"name": f"モンスター{i}", "english_name": f"mon{i}"} for i in range(11)]
+        items = [
+            {"name": f"モンスター{i}", "english_name": f"mon{i}"} for i in range(11)
+        ]
 
         await search(ctx, result, items, "モンスター")
 
