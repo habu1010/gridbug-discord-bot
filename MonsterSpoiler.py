@@ -1,4 +1,5 @@
 import os
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord.ext import commands, tasks
@@ -8,15 +9,18 @@ import MonsterInfo
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 from utils import limit_str_length
 
+if TYPE_CHECKING:
+    from bot import Bot
+
 
 class MonsterSpoiler(commands.Cog):
-    def __init__(self, bot: commands.Bot, config: dict):
+    def __init__(self, bot: commands.Bot, config: dict[str, Any]):
         self.mon_info_url = config["mon_info_url"]
         self.m_info = MonsterInfo.MonsterInfo(
             os.path.expanduser(config["mon_info_db_path"])
         )
         self.bot = bot
-        self.mon_info_list = []
+        self.mon_info_list: list[ListSearch.Item] = []
 
         self.parser = ErrorCatchingArgumentParser(prog="$mon", add_help=False)
         self.parser.add_argument("-e", "--english", action="store_true")
@@ -25,7 +29,7 @@ class MonsterSpoiler(commands.Cog):
         self.checker_task.start()
 
     @commands.command(usage="[-e] monster_name")
-    async def mon(self, ctx: commands.Context, *args):
+    async def mon(self, ctx: commands.Context, *args: str) -> None:
         """モンスターを検索する
 
         モンスターを名称の一部で検索し、情報を表示します。
@@ -57,7 +61,7 @@ class MonsterSpoiler(commands.Cog):
             parse_result.english,
         )
 
-    async def create_mon_info_embed(self, mon_info: dict):
+    async def create_mon_info_embed(self, mon_info: ListSearch.Item) -> discord.Embed:
         header = "[U] " if mon_info["is_unique"] else ""
         title = header + "{name} / {english_name} ({symbol})".format(**mon_info)
         # Discord Embed titleは256文字まで
@@ -71,19 +75,21 @@ ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  E
         description += await self.m_info.get_monster_detail(mon_info["id"])
         return discord.Embed(title=title, description=description)
 
-    async def send_error(self, ctx: commands.Context, error_msg: str):
+    async def send_error(self, ctx: commands.Context, error_msg: str) -> None:
         embed = discord.Embed(title=error_msg, color=discord.Color.red())
         await ctx.reply(embed=embed)
 
-    async def send_mon_info(self, ctx: commands.Context, mon_info, _):
+    async def send_mon_info(
+        self, ctx: commands.Context, mon_info: ListSearch.Item, _: None
+    ) -> None:
         await ctx.reply(embed=await self.create_mon_info_embed(mon_info))
 
     @tasks.loop(seconds=300)
-    async def checker_task(self):
+    async def checker_task(self) -> None:
         updated = await self.m_info.check_update(self.mon_info_url)
         if updated or not self.mon_info_list:
             self.mon_info_list = await self.m_info.get_monster_info_list()
 
 
-async def setup(bot):
+async def setup(bot: "Bot") -> None:
     await bot.add_cog(MonsterSpoiler(bot, bot.ext))

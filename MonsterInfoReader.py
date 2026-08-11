@@ -1,26 +1,27 @@
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any
 
 
 @dataclass
 class MonsterInfoReader:
-    name_lines: List[str]
-    detail_lines: List[str]
+    name_lines: list[str]
+    detail_lines: list[str]
     info_line: str
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.clear()
 
-    def clear(self):
+    def clear(self) -> None:
         self.name_lines = []
         self.detail_lines = []
         self.info_line = ""
 
-    def has_complete_data(self):
-        return self.name_lines and self.info_line and self.detail_lines
+    def has_complete_data(self) -> bool:
+        return bool(self.name_lines and self.info_line and self.detail_lines)
 
-    def push_line(self, line: str):
+    def push_line(self, line: str) -> None:
         if line.startswith("==="):
             self.info_line = line
         elif self.info_line:
@@ -28,7 +29,7 @@ class MonsterInfoReader:
         else:
             self.name_lines.append(line)
 
-    def get_mon_info_list(self, mon_info: str):
+    def get_mon_info_list(self, mon_info: str) -> Iterator[dict[str, Any]]:
         lines = mon_info.splitlines()
 
         for line in lines:
@@ -48,7 +49,7 @@ class MonsterInfoReader:
             r"^(\[.\])?\s*(?:(.+)\/)?(.+)\s*\((.+?)\)$", name_line, flags=re.DOTALL
         )
         if m is None:
-            return
+            return None
         # 日本語名は省略されている場合がある
         name = m[2].replace("\n", "") if m[2] else ""
         english_name = m[3].replace("\n", " ")
@@ -61,7 +62,7 @@ class MonsterInfoReader:
             self.info_line,
         )
         if m is None:
-            return
+            return None
         result = {
             "id": m[1],
             "name": name,

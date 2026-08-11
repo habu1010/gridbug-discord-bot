@@ -1,7 +1,7 @@
 import asyncio
 import os
-from collections.abc import Iterable
-from typing import Dict, List, Optional
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 import aiosqlite
@@ -15,27 +15,30 @@ import KindInfoReader
 import ListSearch
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 
+if TYPE_CHECKING:
+    from bot import Bot
+
 
 class ArtifactSpoiler(commands.Cog):
     def __init__(self, base_url: str, db_path: str):
         self.base_url = base_url
         self.db_path = db_path
-        self.etags: Dict[str, str] = {}
+        self.etags: dict[str, str] = {}
 
         FlagInfoReader.FlagInfoReader().create_flag_info_table(
             db_path,
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "flag_info.txt"),
         )
 
-        self._artifacts: List[Dict] = []
+        self._artifacts: list[ListSearch.Item] = []
 
     @property
-    def artifacts(self):
+    def artifacts(self) -> list[ListSearch.Item]:
         return self._artifacts
 
-    async def load_artifacts(self) -> List[Dict]:
+    async def load_artifacts(self) -> list[ListSearch.Item]:
 
-        def fullname(art: aiosqlite.Row):
+        def fullname(art: aiosqlite.Row) -> str:
             a = art["a_name"]
             k = art["k_name"]
             if art["is_fullname"]:
@@ -44,7 +47,7 @@ class ArtifactSpoiler(commands.Cog):
                 return k + a
             return a + k
 
-        def fullname_en(art: aiosqlite.Row):
+        def fullname_en(art: aiosqlite.Row) -> str:
             a = art["a_name_en"]
             k = art["k_name_en"]
             f = a if art["is_fullname"] else f"{k} {a}"
@@ -84,7 +87,7 @@ FROM
                     for art in await c.fetchall()
                 ]
 
-    async def describe_artifact(self, art: Dict):
+    async def describe_artifact(self, art: ListSearch.Item) -> tuple[str, str]:
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
             async with conn.execute(
@@ -100,8 +103,10 @@ WHERE
                 {"id": art["id"]},
             ) as c:
                 a_info = await c.fetchone()
-            flags = await conn.execute_fetchall(
-                """
+            # describe_flag_group() が同じ結果を何度も走査するためリストにする
+            flags = list(
+                await conn.execute_fetchall(
+                    """
 SELECT
     *
 FROM
@@ -113,7 +118,8 @@ ORDER BY
     flag_group,
     id_in_group
 """,
-                {"id": art["id"]},
+                    {"id": art["id"]},
+                )
             )
 
         main = f"[{art['id']}] ★{art['fullname']}"
@@ -149,7 +155,7 @@ ORDER BY
 
         return (main, detail)
 
-    def describe_to_hit_dam(self, a_info: aiosqlite.Row):
+    def describe_to_hit_dam(self, a_info: aiosqlite.Row) -> str:
         to_hit = a_info["to_hit"]
         to_dam = a_info["to_dam"]
         res = ""
@@ -161,7 +167,7 @@ ORDER BY
                 res += f" ({to_hit:+},{to_dam:+})"
         return res
 
-    def describe_ac(self, a_info: aiosqlite.Row):
+    def describe_ac(self, a_info: aiosqlite.Row) -> str:
         res = ""
         if a_info["is_protective_equipment"] or a_info["base_ac"] > 0:
             res += f" [{a_info['base_ac']},{a_info['to_ac']:+}]"
@@ -170,8 +176,8 @@ ORDER BY
         return res
 
     def describe_flag_group(
-        self, flags: Iterable[aiosqlite.Row], head: str, group_name: str
-    ):
+        self, flags: Sequence[aiosqlite.Row], head: str, group_name: str
+    ) -> str:
         if group_name not in [flag["flag_group"] for flag in flags]:
             return ""
         return (
@@ -186,7 +192,7 @@ ORDER BY
             + "\n "
         )
 
-    def describe_activation(self, a_info: aiosqlite.Row):
+    def describe_activation(self, a_info: aiosqlite.Row) -> str:
         if a_info["activate_flag"] == "NONE":
             return ""
         timeout = self.describe_activation_timeout(
@@ -194,7 +200,7 @@ ORDER BY
         ) or self.describe_activation_timeout_special(a_info["activate_flag"])
         return f"\n発動: {a_info['desc']} : {timeout}\n"
 
-    def describe_activation_timeout(self, timeout, dice) -> Optional[str]:
+    def describe_activation_timeout(self, timeout: int, dice: int) -> str | None:
         if timeout == 0:
             return "いつでも"
         elif timeout > 0 and dice == 0:
@@ -204,13 +210,13 @@ ORDER BY
 
         return None
 
-    def describe_activation_timeout_special(self, flag: str):
+    def describe_activation_timeout_special(self, flag: str) -> str:
         DICT = {"TERROR": "3*(レベル+10) ターン毎", "MURAMASA": "確率50%で壊れる"}
         return DICT.get(flag, "不明")
 
     async def download_file(
         self, session: aiohttp.ClientSession, filepath: str
-    ) -> Optional[str]:
+    ) -> str | None:
         url = f"{self.base_url}/{filepath}"
         async with session.get(
             url, headers={"if-none-match": self.etags.get(filepath, "")}
@@ -245,7 +251,7 @@ ORDER BY
             # 未ロードなら、アーティファクト情報を読み込む
             self._artifacts = await self.load_artifacts()
 
-    def output_test(self):
+    def output_test(self) -> None:
         for art in self._artifacts:
             print(self.describe_artifact(art))
 
@@ -253,10 +259,10 @@ ORDER BY
 class ArtifactSpoilerCog(commands.Cog):
     BRANCHES = ["master", "develop"]
 
-    def __init__(self, bot: commands.Command, config: dict):
+    def __init__(self, bot: commands.Bot, config: dict[str, Any]):
         self.bot = bot
 
-        self.spoilers: Dict[str, ArtifactSpoiler] = {}
+        self.spoilers: dict[str, ArtifactSpoiler] = {}
         for branch in self.BRANCHES:
             base_url = f"{config['hengband_src_url']}/{branch}"
             db_path = os.path.join(
@@ -272,7 +278,7 @@ class ArtifactSpoilerCog(commands.Cog):
         self.checker_task.start()
 
     @commands.command(usage="[-e] artifact_name")
-    async def art(self, ctx: commands.Context, *args):
+    async def art(self, ctx: commands.Context, *args: str) -> None:
         """アーティファクトを検索する
 
         アーティファクトを名称の一部で検索し、情報を表示します。
@@ -312,8 +318,8 @@ class ArtifactSpoilerCog(commands.Cog):
         )
 
     async def send_artifact_info(
-        self, ctx: commands.Context, art: dict, spoiler: ArtifactSpoiler
-    ):
+        self, ctx: commands.Context, art: ListSearch.Item, spoiler: ArtifactSpoiler
+    ) -> None:
         art_desc = await spoiler.describe_artifact(art)
         embed = discord.Embed(
             title=discord.utils.escape_markdown(art_desc[0]),
@@ -321,7 +327,7 @@ class ArtifactSpoilerCog(commands.Cog):
         )
         await ctx.reply(embed=embed)
 
-    async def send_error(self, ctx: commands.Context, error_msg: str):
+    async def send_error(self, ctx: commands.Context, error_msg: str) -> None:
         embed = discord.Embed(title=error_msg, color=discord.Color.red())
         await ctx.reply(embed=embed)
 
@@ -334,5 +340,5 @@ class ArtifactSpoilerCog(commands.Cog):
             await asyncio.gather(*update_tasks)
 
 
-async def setup(bot):
+async def setup(bot: "Bot") -> None:
     await bot.add_cog(ArtifactSpoilerCog(bot, bot.ext))

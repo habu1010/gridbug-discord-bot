@@ -4,6 +4,8 @@
 空行で区切ったプレーンテキスト形式。
 """
 
+from typing import Any
+
 from MonsterInfoReader import MonsterInfoReader
 
 SIMPLE_ENTRY = """グリッド・バグ/Grid bug (紫の 'I')
@@ -12,12 +14,19 @@ SIMPLE_ENTRY = """グリッド・バグ/Grid bug (紫の 'I')
 """
 
 
-def parse_one(text: str):
-    """1体分のテキストを渡してパース結果を返す"""
+def parse_raw(text: str) -> dict[str, Any] | None:
+    """1体分のテキストを渡してパース結果をそのまま返す (解析失敗ならNone)"""
     reader = MonsterInfoReader()
     for line in text.splitlines():
         reader.push_line(line)
     return reader.parse()
+
+
+def parse_one(text: str) -> dict[str, Any]:
+    """1体分のテキストを渡してパースに成功した結果を返す"""
+    result = parse_raw(text)
+    assert result is not None
+    return result
 
 
 class Test_push_line:
@@ -133,7 +142,7 @@ class Test_parse:
         assert reader.parse() is None
 
     def test_名前行が想定の形式でない場合はNoneを返す(self):
-        result = parse_one(
+        result = parse_raw(
             "括弧のない名前\n"
             "=== Num:1  Lev:1  Rar:1  Spd:+0  Hp:1d1  Ac:1  Exp:1\n"
             "詳細。\n"
@@ -142,7 +151,7 @@ class Test_parse:
         assert result is None
 
     def test_情報行が想定の形式でない場合はNoneを返す(self):
-        result = parse_one(
+        result = parse_raw(
             "グリッド・バグ/Grid bug (紫の 'I')\n" "=== 想定外の形式\n" "詳細。\n"
         )
 

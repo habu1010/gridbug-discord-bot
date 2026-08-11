@@ -1,6 +1,7 @@
 import re
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterator
+from typing import Any
 
 
 def convert_timeout_to_int(s: str) -> int:
@@ -12,7 +13,7 @@ def convert_timeout_to_int(s: str) -> int:
 
 class ActivationInfoReader:
 
-    def get_activation_info_list(self, info_table_src: str) -> Iterable[dict]:
+    def get_activation_info_list(self, info_table_src: str) -> Iterator[dict[str, Any]]:
         pattern = re.compile(
             r'{\s*"(\w+)",\s*(\S+),\s*([-]?\d+)\s*,\s*([-]?\d+)\s*,'
             r'\s*([\w:]+)\s*,\s*([-]?\d+),\s*_\("(.+)",\s*"(.+)"\)\s*}'

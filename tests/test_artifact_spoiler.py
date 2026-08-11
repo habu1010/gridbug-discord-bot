@@ -7,7 +7,7 @@ ArtifactSpoilerCog は __init__ で checker_task を起動するためテスト�
 """
 
 import pytest
-from conftest import FakeClientSession, FakeResponse, read_fixture
+from conftest import FakeClientSession, FakeResponse, as_session, read_fixture
 
 from ArtifactSpoiler import ArtifactSpoiler
 
@@ -325,7 +325,7 @@ class Test_check_for_updates:
             }
         )
 
-        await spoiler.check_for_updates(session)
+        await spoiler.check_for_updates(as_session(session))
 
         assert len(spoiler.artifacts) == 5
         assert [r["url"].rsplit("/", 1)[-1] for r in session.requests] == [
@@ -338,10 +338,10 @@ class Test_check_for_updates:
         # 事前にDBは作成済みなので、304応答でもアーティファクトは読み込まれる
         session = FakeClientSession(FakeResponse(304))
 
-        await spoiler.check_for_updates(session)
+        await spoiler.check_for_updates(as_session(session))
         loaded = spoiler.artifacts
         assert len(loaded) == 5
 
         # 2度目は更新もロードも行わず、同じリストを保持したままになる
-        await spoiler.check_for_updates(session)
+        await spoiler.check_for_updates(as_session(session))
         assert spoiler.artifacts is loaded

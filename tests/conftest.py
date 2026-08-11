@@ -6,9 +6,12 @@ DBは全て pytest の tmp_path 配下に作成する。
 
 import os
 import sys
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, cast
 
+import aiohttp
+import discord
 import pytest
+from discord.ext import commands
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -118,8 +121,8 @@ class FakeContext:
     """
 
     def __init__(self, author_id: int = 1):
-        self.replies: List[Dict[str, Any]] = []
-        self.help_calls: List[Any] = []
+        self.replies: list[dict[str, Any]] = []
+        self.help_calls: list[Any] = []
         self.command = object()
         self.message = FakeMessage(author_id)
 
@@ -137,7 +140,7 @@ class FakeContext:
         self.help_calls.append(command)
 
     @property
-    def last_reply(self) -> Dict[str, Any]:
+    def last_reply(self) -> dict[str, Any]:
         return self.replies[-1]
 
 
@@ -160,7 +163,7 @@ class FakeResponse:
     """aiohttp のレスポンスを模したスタブ"""
 
     def __init__(
-        self, status: int = 200, body: str = "", headers: Optional[dict] = None
+        self, status: int = 200, body: str = "", headers: dict[str, str] | None = None
     ):
         self.status = status
         self.body = body
@@ -186,16 +189,18 @@ class FakeClientSession:
 
     def __init__(
         self,
-        responses: Union[Dict[str, Any], FakeResponse, None] = None,
+        responses: dict[str, Any] | FakeResponse | None = None,
         **kwargs,
     ):
         if isinstance(responses, FakeResponse):
             responses = {"": responses}
-        self.responses: Dict[str, Any] = responses or {}
-        self.requests: List[Dict[str, Any]] = []
+        self.responses: dict[str, Any] = responses or {}
+        self.requests: list[dict[str, Any]] = []
         self.closed = False
 
-    def get(self, url: str, headers: Optional[dict] = None, **kwargs) -> FakeResponse:
+    def get(
+        self, url: str, headers: dict[str, str] | None = None, **kwargs: Any
+    ) -> FakeResponse:
         self.requests.append({"url": url, "headers": headers})
         for key, res in self.responses.items():
             if key in url:
@@ -210,3 +215,26 @@ class FakeClientSession:
     async def __aexit__(self, *exc_info):
         self.closed = True
         return False
+
+
+# --- 型チェック用のキャストヘルパ -------------------------------------------
+#
+# 上のスタブは本物のクラスを継承していないため、本番コードの引数にそのまま渡すと
+# 型エラーになる。本番側のシグネチャは正確なまま保ちたいので、テストの呼び出し側で
+# キャストする。実行時には何もしない。
+
+
+def as_session(session: FakeClientSession) -> aiohttp.ClientSession:
+    return cast(aiohttp.ClientSession, session)
+
+
+def as_ctx(ctx: Any) -> commands.Context:
+    return cast(commands.Context, ctx)
+
+
+def as_interaction(interaction: Any) -> discord.Interaction:
+    return cast(discord.Interaction, interaction)
+
+
+def as_bot(bot: Any) -> commands.Bot:
+    return cast(commands.Bot, bot)

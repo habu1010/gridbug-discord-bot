@@ -1,5 +1,5 @@
 import hashlib
-from typing import List
+from typing import Any
 
 import aiohttp
 import aiosqlite
@@ -19,7 +19,7 @@ class MonsterInfo:
         self.db_path = db_path
         self.etag = ""
 
-    async def get_monster_info_list(self) -> List[dict]:
+    async def get_monster_info_list(self) -> list[dict[str, Any]]:
         """モンスター情報のリストを取得する
 
         モンスターのID、日本語名/英語名、ユニークかどうか、シンボル、
@@ -28,7 +28,7 @@ class MonsterInfo:
         モンスター詳細は容量が大きいため、別途 get_monster_detail() で取得する
 
         Returns:
-            List[dict]: モンスター情報のリスト
+            list[dict[str, Any]]: モンスター情報のリスト
         """
 
         async with aiosqlite.connect(self.db_path) as conn:

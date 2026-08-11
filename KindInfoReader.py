@@ -1,6 +1,7 @@
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
+from typing import Any
 
 from Jsonc import parse_jsonc
 
@@ -15,10 +16,10 @@ class KindInfoReader:
         sval: int = 0
         pval: int = 0
 
-        def is_complete_data(self):
+        def is_complete_data(self) -> bool:
             return self.id is not None
 
-    def get_k_info_list(self, k_info_txt: str) -> Iterable[dict]:
+    def get_k_info_list(self, k_info_txt: str) -> Iterator[dict[str, Any]]:
         jsonc = parse_jsonc(k_info_txt)
 
         for baseitem in jsonc["baseitems"]:

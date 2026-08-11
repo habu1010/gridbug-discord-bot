@@ -66,6 +66,7 @@ class Test_create_mon_info_embed:
         embed = await cog.create_mon_info_embed(dict(MON_INFO, id=999999))
 
         assert isinstance(embed, discord.Embed)
+        assert embed.description is not None
         assert embed.description.endswith("\n\n")
 
 

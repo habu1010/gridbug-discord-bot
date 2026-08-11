@@ -1,4 +1,5 @@
 import re
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 import discord
@@ -6,9 +7,12 @@ from discord.ext import commands
 
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 
+if TYPE_CHECKING:
+    from bot import Bot
+
 
 class SourceCodeLister(commands.Cog):
-    def __init__(self, bot: commands.Bot, config: dict):
+    def __init__(self, bot: commands.Bot, config: dict[str, Any]):
         self.src_url = config["src_url"]
 
         self.parser = ErrorCatchingArgumentParser(prog="srclist", add_help=False)
@@ -16,7 +20,7 @@ class SourceCodeLister(commands.Cog):
         self.parser.add_argument("display_lines")
 
     @commands.command(usage="filepath display_lines")
-    async def srclist(self, ctx: commands.Context, *args):
+    async def srclist(self, ctx: commands.Context, *args: str) -> None:
         """変愚蛮怒のソースファイルの一部を表示する
 
         positional arguments:
@@ -36,7 +40,7 @@ class SourceCodeLister(commands.Cog):
             return
 
         start, end = self.parse_display_lines(parse_result.display_lines)
-        if not start:
+        if not start or end is None:
             await ctx.send_help(ctx.command)
             return
 
@@ -58,7 +62,9 @@ class SourceCodeLister(commands.Cog):
         msg = "```c\n" + "\n".join(display_lines) + "\n```"
         await ctx.reply(msg)
 
-    def parse_display_lines(self, display_lines: str) -> tuple:
+    def parse_display_lines(
+        self, display_lines: str
+    ) -> tuple[int, int] | tuple[None, None]:
         m = re.fullmatch(r"(\d*)(-?)(\d*)", display_lines)
         if not m or (not m[1] and not m[3]):
             # 数字を全く含まない指定は解釈できない
@@ -82,10 +88,10 @@ class SourceCodeLister(commands.Cog):
 
         return (start, end)
 
-    async def send_error(self, ctx: commands.Context, error_msg: str):
+    async def send_error(self, ctx: commands.Context, error_msg: str) -> None:
         embed = discord.Embed(title=error_msg, color=discord.Color.red())
         await ctx.reply(embed=embed)
 
 
-async def setup(bot):
+async def setup(bot: "Bot") -> None:
     await bot.add_cog(SourceCodeLister(bot, bot.ext))
