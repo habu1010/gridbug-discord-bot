@@ -242,7 +242,7 @@ class Test_describe_artifact:
         assert (
             main
             == "[124] ★ロング・ボウ『ベルスロンディング』 (x4) (+20,+22) / The Long Bow 'Belthronding'"
-        )  # noqa: E501
+        )
         assert detail.startswith("+20の修正: 器用, 隠密")
 
     async def test_鎧はACを表示する(self, spoiler):
