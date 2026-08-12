@@ -40,13 +40,20 @@ class Translator(commands.Cog):
             return
 
         text = " ".join(parse_result.text)
-        # googletrans は引数がリストの場合に結果のリストを返すため戻り値の型が
+        loop = asyncio.get_running_loop()
+        # detect() は translate() と同じくHTTPアクセスを行う同期関数なので、
+        # イベントループを塞がないよう executor で実行する。
+        # また googletrans は引数がリストの場合に結果のリストを返すため戻り値の型が
         # union に推論される。ここでは常に単一の文字列を渡すのでcastする。
-        src = parse_result.src or cast(Detected, self.translator.detect(text)).lang
+        src = (
+            parse_result.src
+            or cast(
+                Detected, await loop.run_in_executor(None, self.translator.detect, text)
+            ).lang
+        )
         dest = parse_result.dest or ("ja" if src != "ja" else "en")
 
         try:
-            loop = asyncio.get_running_loop()
             translated = cast(
                 Translated,
                 await loop.run_in_executor(
