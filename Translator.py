@@ -9,7 +9,7 @@ from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 
 
 class Translator(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self) -> None:
         self.translator = googletrans.Translator()
 
         self.parser = ErrorCatchingArgumentParser(prog="translate", add_help=False)
@@ -41,16 +41,15 @@ class Translator(commands.Cog):
 
         text = " ".join(parse_result.text)
         loop = asyncio.get_running_loop()
-        # detect() は translate() と同じくHTTPアクセスを行う同期関数なので、
-        # イベントループを塞がないよう executor で実行する。
-        # また googletrans は引数がリストの場合に結果のリストを返すため戻り値の型が
-        # union に推論される。ここでは常に単一の文字列を渡すのでcastする。
-        src = (
-            parse_result.src
-            or cast(
-                Detected, await loop.run_in_executor(None, self.translator.detect, text)
-            ).lang
-        )
+
+        src = parse_result.src
+        if not src:
+            # detect() は translate() と同じくHTTPアクセスを行う同期関数なので、
+            # イベントループを塞がないよう executor で実行する
+            detected = await loop.run_in_executor(None, self.translator.detect, text)
+            # googletrans は引数がリストの場合に結果のリストを返すため戻り値の型が
+            # union に推論される。ここでは常に単一の文字列を渡すのでcastする
+            src = cast(Detected, detected).lang
         dest = parse_result.dest or ("ja" if src != "ja" else "en")
 
         try:
@@ -68,4 +67,4 @@ class Translator(commands.Cog):
 
 
 async def setup(bot: commands.Bot) -> None:
-    await bot.add_cog(Translator(bot))
+    await bot.add_cog(Translator())

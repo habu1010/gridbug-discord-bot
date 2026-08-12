@@ -6,7 +6,7 @@
 
 import discord
 import pytest
-from conftest import FakeClientSession, FakeResponse, as_bot
+from conftest import FakeClientSession, FakeResponse
 
 import SourceCodeLister
 from SourceCodeLister import SourceCodeLister as Cog
@@ -17,7 +17,7 @@ SRC = "\n".join(f"line{i}" for i in range(1, 51))
 
 @pytest.fixture
 def cog() -> Cog:
-    return Cog(as_bot(None), {"src_url": SRC_URL})
+    return Cog({"src_url": SRC_URL})
 
 
 class Test_parse_display_lines:
@@ -37,10 +37,12 @@ class Test_parse_display_lines:
     def test_行指定の解釈(self, cog, display_lines, expected):
         assert cog.parse_display_lines(display_lines) == expected
 
-    @pytest.mark.parametrize("display_lines", ["abc", "", "-", "10abc", "abc10", "1.5"])
+    @pytest.mark.parametrize(
+        "display_lines", ["abc", "", "-", "10abc", "abc10", "1.5", "0", "0-5"]
+    )
     def test_解釈できない指定はNoneを返す(self, cog, display_lines):
-        # 呼び出し側は start が偽であればヘルプを表示する
-        assert cog.parse_display_lines(display_lines) == (None, None)
+        # 呼び出し側は None であればヘルプを表示する
+        assert cog.parse_display_lines(display_lines) is None
 
 
 class Test_srclistコマンド:

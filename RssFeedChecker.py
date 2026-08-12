@@ -20,12 +20,10 @@ if TYPE_CHECKING:
 class RssChecker:
     RECORD_DIR = os.path.expanduser("~/.rss_checker")
 
-    #: 通知先のチャンネルID。RssCheckCog が設定から読んで代入する。
-    send_channel_id: int
-
-    def __init__(self, name: str, url: str):
+    def __init__(self, name: str, url: str, send_channel_id: int):
         self.name = name
         self.url = url
+        self.send_channel_id = send_channel_id
         os.makedirs(self.RECORD_DIR, exist_ok=True)
         self.record_path = os.path.join(self.RECORD_DIR, name) + ".json"
         self.__load_record()
@@ -105,7 +103,7 @@ class HengscoreRssChecker(RssChecker):
 
 
 class RssCheckCog(commands.Cog):
-    #: 設定の checker: に書ける名前とクラスの対応
+    # 設定の checker: に書ける名前とクラスの対応
     CHECKER_CLASSES: dict[str, type[RssChecker]] = {
         c.__name__: c for c in (RssChecker, PukiwikiRssChecker, HengscoreRssChecker)
     }
@@ -120,9 +118,9 @@ class RssCheckCog(commands.Cog):
                     f"Unknown RSS checker class: {checker_class_name}"
                 )
                 continue
-            checker = checker_class(feed["name"], feed["url"])
-            checker.send_channel_id = feed["channel_id"]
-            self.checkers.append(checker)
+            self.checkers.append(
+                checker_class(feed["name"], feed["url"], feed["channel_id"])
+            )
 
         self.client_session = aiohttp.ClientSession()
         self.bot = bot

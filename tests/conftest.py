@@ -11,7 +11,6 @@ from typing import Any, cast
 import aiohttp
 import discord
 import pytest
-from discord.ext import commands
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -228,13 +227,6 @@ def as_session(session: FakeClientSession) -> aiohttp.ClientSession:
     return cast(aiohttp.ClientSession, session)
 
 
-def as_ctx(ctx: Any) -> commands.Context:
-    return cast(commands.Context, ctx)
-
-
+# FakeInteraction は test_list_search.py 側で定義されているためここでは Any で受ける
 def as_interaction(interaction: Any) -> discord.Interaction:
     return cast(discord.Interaction, interaction)
-
-
-def as_bot(bot: Any) -> commands.Bot:
-    return cast(commands.Bot, bot)

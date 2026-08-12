@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 class SourceCodeLister(commands.Cog):
-    def __init__(self, bot: commands.Bot, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.src_url = config["src_url"]
 
         self.parser = ErrorCatchingArgumentParser(prog="srclist", add_help=False)
@@ -39,10 +39,11 @@ class SourceCodeLister(commands.Cog):
             await ctx.send_help(ctx.command)
             return
 
-        start, end = self.parse_display_lines(parse_result.display_lines)
-        if not start or end is None:
+        parsed = self.parse_display_lines(parse_result.display_lines)
+        if parsed is None:
             await ctx.send_help(ctx.command)
             return
+        start, end = parsed
 
         async with aiohttp.ClientSession() as session:
             async with session.get(self.src_url + parse_result.filepath) as res:
@@ -62,13 +63,11 @@ class SourceCodeLister(commands.Cog):
         msg = "```c\n" + "\n".join(display_lines) + "\n```"
         await ctx.reply(msg)
 
-    def parse_display_lines(
-        self, display_lines: str
-    ) -> tuple[int, int] | tuple[None, None]:
+    def parse_display_lines(self, display_lines: str) -> tuple[int, int] | None:
         m = re.fullmatch(r"(\d*)(-?)(\d*)", display_lines)
         if not m or (not m[1] and not m[3]):
             # 数字を全く含まない指定は解釈できない
-            return (None, None)
+            return None
 
         if m[1] and m[2] and m[3]:
             # NN-MM
@@ -86,6 +85,10 @@ class SourceCodeLister(commands.Cog):
             start = int(m[1])
             end = start
 
+        if start < 1:
+            # 0行目以前の指定は解釈できない
+            return None
+
         return (start, end)
 
     async def send_error(self, ctx: commands.Context, error_msg: str) -> None:
@@ -94,4 +97,4 @@ class SourceCodeLister(commands.Cog):
 
 
 async def setup(bot: "Bot") -> None:
-    await bot.add_cog(SourceCodeLister(bot, bot.ext))
+    await bot.add_cog(SourceCodeLister(bot.ext))
