@@ -9,8 +9,8 @@ from discord.ext import commands
 
 
 class Bot(commands.Bot):
-    #: 現在ロード中の拡張の設定。load_extension() の直前に代入され、
-    #: 各モジュールの setup() の中だけで有効な一時的な受け渡し用の属性。
+    # 現在ロード中の拡張の設定。load_extension() の直前に代入され、
+    # 各モジュールの setup() の中だけで有効な一時的な受け渡し用の属性。
     ext: dict[str, Any]
 
     def __init__(

@@ -23,13 +23,10 @@ def roll(cog: DiceRoll, dice: int, side: int) -> discord.Embed:
     return cog._roll(dice, side)
 
 
-async def invoke_roll(cog: DiceRoll, ctx: Any, arg: str) -> None:
-    """$roll コマンドの本体を直接呼ぶ
-
-    Command.callback は「Cogのメソッド」と「単独の関数」のunionとして
-    型付けされており、cog を渡す呼び出しが型エラーになるため cast で落とす。
-    """
-    await cast(Any, DiceRoll.roll.callback)(cog, ctx, arg)
+# Command.callback は「Cogのメソッド」と「単独の関数」のunionとして型付けされており、
+# roll は引数の数が固定なので cog を渡す呼び出しが型エラーになる。
+# (srclist のように *args を取るコマンドは可変長になるためそのまま呼べる)
+roll_callback = cast(Any, DiceRoll.roll.callback)
 
 
 class Test_diceroll_pattern:
@@ -92,7 +89,7 @@ class Test_roll:
 
 class Test_rollコマンド:
     async def test_結果が返信される(self, cog, ctx):
-        await invoke_roll(cog, ctx, "2d6")
+        await roll_callback(cog, ctx, "2d6")
 
         embed = ctx.last_reply["embed"]
         assert embed.title.isdigit()
@@ -100,11 +97,11 @@ class Test_rollコマンド:
 
     @pytest.mark.parametrize("arg", ["abc", "0d6", "2d0"])
     async def test_不正な指定では返信しない(self, cog, ctx, arg):
-        await invoke_roll(cog, ctx, arg)
+        await roll_callback(cog, ctx, arg)
 
         assert ctx.replies == []
 
     async def test_振る回数が多すぎる場合はエラーが返信される(self, cog, ctx):
-        await invoke_roll(cog, ctx, "101d6")
+        await roll_callback(cog, ctx, "101d6")
 
         assert ctx.last_reply["embed"].title == "振る回数が多すぎます"

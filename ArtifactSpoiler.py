@@ -176,19 +176,12 @@ ORDER BY
     def describe_flag_group(
         self, flags: Sequence[aiosqlite.Row], head: str, group_name: str
     ) -> str:
-        if group_name not in [flag["flag_group"] for flag in flags]:
+        descriptions = [
+            flag["description"] for flag in flags if flag["flag_group"] == group_name
+        ]
+        if not descriptions:
             return ""
-        return (
-            f"{head}"
-            + ", ".join(
-                [
-                    flag["description"]
-                    for flag in flags
-                    if flag["flag_group"] == group_name
-                ]
-            )
-            + "\n "
-        )
+        return head + ", ".join(descriptions) + "\n "
 
     def describe_activation(self, a_info: aiosqlite.Row) -> str:
         if a_info["activate_flag"] == "NONE":

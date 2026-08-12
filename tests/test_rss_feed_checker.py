@@ -16,6 +16,7 @@ from conftest import FakeClientSession, FakeResponse, as_session
 from RssFeedChecker import HengscoreRssChecker, PukiwikiRssChecker, RssChecker
 
 FEED_URL = "https://example.invalid/feed.rss"
+CHANNEL_ID = 12345
 
 
 def build_rss(items: list) -> str:
@@ -57,9 +58,7 @@ def record_dir(tmp_path, monkeypatch):
 
 
 def make_checker(cls=RssChecker, name="test") -> RssChecker:
-    checker = cls(name, FEED_URL)
-    checker.name = name
-    return checker
+    return cls(name, FEED_URL, CHANNEL_ID)
 
 
 class Test_記録ファイル:
