@@ -249,9 +249,9 @@ ORDER BY
             # 未ロードなら、アーティファクト情報を読み込む
             self._artifacts = await self.load_artifacts()
 
-    def output_test(self) -> None:
+    async def output_test(self) -> None:
         for art in self._artifacts:
-            print(self.describe_artifact(art))
+            print(await self.describe_artifact(art))
 
 
 class ArtifactSpoilerCog(commands.Cog):
