@@ -131,23 +131,34 @@ class RssCheckCog(commands.Cog):
 
     async def cog_unload(self) -> None:
         self.checker_task.cancel()
+        await self.client_session.close()
 
     @tasks.loop(seconds=60.0)
     async def checker_task(self) -> None:
         new_items_list = await asyncio.gather(
-            *[c.get_new_items(self.client_session, 5) for c in self.checkers]
+            *[c.get_new_items(self.client_session, 5) for c, _ in self.targets]
         )
 
-        for checker, new_items in zip(self.checkers, new_items_list):
-            channel = self.bot.get_channel(checker.send_channel_id)
-            if not isinstance(channel, discord.abc.Messageable):
-                continue
+        for (checker, channel), new_items in zip(self.targets, new_items_list):
             for item in new_items:
                 await channel.send(embed=checker.build_embed(item))
 
     @checker_task.before_loop
     async def before_checker_task(self) -> None:
         await self.bot.wait_until_ready()
+
+        # get_new_items() は取得した記事を既読として記録するため、
+        # 送信できないチェッカーはフィードの取得自体を行わないよう最初に除外する
+        self.targets: list[tuple[RssChecker, discord.abc.Messageable]] = []
+        for checker in self.checkers:
+            channel = self.bot.get_channel(checker.send_channel_id)
+            if not isinstance(channel, discord.abc.Messageable):
+                getLogger(__name__).warning(
+                    f"{checker.name}: 送信先チャンネル"
+                    f" (id={checker.send_channel_id}) に送信できません"
+                )
+                continue
+            self.targets.append((checker, channel))
 
 
 async def setup(bot: "Bot") -> None:
