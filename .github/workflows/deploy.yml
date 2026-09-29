@@ -1,3 +1,5 @@
+name: Deploy
+
 on:
   push:
     branches: [main]
@@ -5,15 +7,25 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+# 続けてpushされた場合でも、デプロイ同士を並行させず順番に実行する
+concurrency:
+  group: deploy
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Deploy the bot
-        uses: easingthemes/ssh-deploy@main
+        # SSH秘密鍵を渡すサードパーティのアクションなので、コミットSHAで固定する
+        uses: easingthemes/ssh-deploy@2cc5b27bf3029d0455dd5e09fe02633904031447 # v6.0.3
         with:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           ARGS: "-avz --delete"
@@ -21,11 +33,16 @@ jobs:
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           TARGET: ${{ secrets.REMOTE_TARGET }}
           EXCLUDE: "/.git/, /.github/"
+          # 未指定だとスクリプトが失敗しても警告だけでジョブは成功扱いになる
+          SCRIPT_AFTER_REQUIRED: true
           SCRIPT_AFTER: |
+            set -e
             cd ${{ secrets.REMOTE_TARGET }}
             cd ..
-            docker compose down
-            docker compose up --build -d
+            # up --build はビルドを終えてからコンテナを入れ替えるため、停止時間は
+            # 入れ替えの間だけで済み、ビルドに失敗した場合は旧コンテナが動き続ける。
+            # 手動実行でも bot を再起動できるよう、変更がなくても作り直す
+            docker compose up --build -d --force-recreate
             docker image prune -f
 
       - name: Notify Discord of the deployment results
