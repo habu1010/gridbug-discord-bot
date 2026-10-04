@@ -327,6 +327,16 @@ class Test_describe_artifact:
         # 本家テーブル (経験値維持) -> flag_info.txt (乱テレポート) -> 未定義 の順
         assert "経験値維持, 乱テレポート, NEW_UNKNOWN_FLAG\n" in detail
 
+    async def test_IGNOREグループのフラグは表示しない(self, spoiler, art_db):
+        with sqlite3.connect(art_db) as conn:
+            conn.execute("INSERT INTO a_info_flags VALUES(19, 'DARK_SOURCE')")
+        art = await self.get_art(spoiler, 19)
+
+        _, detail = await spoiler.describe_artifact(art)
+
+        assert "DARK_SOURCE" not in detail
+        assert "経験値維持\n" in detail
+
     async def test_詳細が見つからない場合はメッセージを返す(self, spoiler):
         main, detail = await spoiler.describe_artifact(
             {"id": 99999, "fullname": "無い物", "fullname_en": "Nothing"}

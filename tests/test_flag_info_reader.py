@@ -293,3 +293,12 @@ class Test_実際のflag_info_txt:
         empty = [f["name"] for g in groups for f in g["flags"] if not f["description"]]
 
         assert empty == []
+
+    def test_DARK_SOURCEは表示しない(self):
+        # 暗闇光源としての表示は LITE_M1 などが担い、DARK_SOURCE は処理上の区別にのみ使われる
+        groups = collect_groups(REAL_FLAG_INFO_PATH)
+        ignored = {
+            f["name"] for g in groups if g["name"] == "IGNORE" for f in g["flags"]
+        }
+
+        assert "DARK_SOURCE" in ignored
