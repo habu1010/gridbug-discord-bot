@@ -6,12 +6,20 @@ DBからアーティファクト情報を組み立てる非同期メソッドを
 ArtifactSpoilerCog は __init__ で checker_task を起動するためテストでは生成しない。
 """
 
+import logging
 import sqlite3
 
 import pytest
-from conftest import FakeClientSession, FakeResponse, as_session, read_fixture
+from conftest import (
+    FakeClientSession,
+    FakeResponse,
+    as_session,
+    create_old_schema_flag_info,
+    read_fixture,
+)
 
 from ArtifactSpoiler import ArtifactSpoiler
+from FlagInfoReader import FlagInfoReader
 
 BASE_URL = "https://example.invalid/hengband/master"
 
@@ -19,6 +27,22 @@ BASE_URL = "https://example.invalid/hengband/master"
 @pytest.fixture
 def spoiler(art_db) -> ArtifactSpoiler:
     return ArtifactSpoiler(BASE_URL, art_db)
+
+
+def upstream_responses(overrides: dict[str, FakeResponse] | None = None) -> dict:
+    """check_for_updates() が取得する本家ファイルに、fixture の内容で200を返す応答
+
+    overrides にファイル名と応答を渡すと、そのファイルだけ差し替えられる。
+    """
+    files = [
+        "spoiler-table.cpp",
+        "ArtifactDefinitions.jsonc",
+        "BaseitemDefinitions.jsonc",
+        "activation-info-table.cpp",
+    ]
+    return {name: FakeResponse(200, read_fixture(name)) for name in files} | (
+        overrides or {}
+    )
 
 
 def a_info(**kwargs) -> dict:
@@ -245,7 +269,7 @@ class Test_describe_artifact:
             main
             == "[124] ★ロング・ボウ『ベルスロンディング』 (x4) (+20,+22) / The Long Bow 'Belthronding'"
         )
-        assert detail.startswith("+20の修正: 器用, 隠密")
+        assert detail.startswith("+20の修正: 器用さ, 隠密")
 
     async def test_鎧はACを表示する(self, spoiler):
         art = await self.get_art(spoiler, 19)
@@ -255,7 +279,7 @@ class Test_describe_artifact:
         assert main.startswith(
             "[19] ★ミスリル・チェイン・メイル『魂の守り手』 (-4) [40,+20]"
         )
-        assert "+2の修正: 耐久" in detail
+        assert "+2の修正: 耐久力" in detail
         assert "耐性: 酸, 火炎" in detail
         assert "経験値維持" in detail
         assert "発動: *体力回復* : 888 ターン毎" in detail
@@ -300,7 +324,7 @@ class Test_describe_artifact:
 
         _, detail = await spoiler.describe_artifact(art)
 
-        # flag_info.txt の定義順 (経験値維持 -> 乱テレポート) -> 未定義 の順
+        # 本家テーブル (経験値維持) -> flag_info.txt (乱テレポート) -> 未定義 の順
         assert "経験値維持, 乱テレポート, NEW_UNKNOWN_FLAG\n" in detail
 
     async def test_詳細が見つからない場合はメッセージを返す(self, spoiler):
@@ -347,28 +371,75 @@ class Test_check_for_updates:
     async def test_取得したファイルでDBを更新する(self, tmp_path):
         db_path = str(tmp_path / "art.db")
         spoiler = ArtifactSpoiler(BASE_URL, db_path)
-        session = FakeClientSession(
-            {
-                "ArtifactDefinitions.jsonc": FakeResponse(
-                    200, read_fixture("ArtifactDefinitions.jsonc")
-                ),
-                "BaseitemDefinitions.jsonc": FakeResponse(
-                    200, read_fixture("BaseitemDefinitions.jsonc")
-                ),
-                "activation-info-table.cpp": FakeResponse(
-                    200, read_fixture("activation-info-table.cpp")
-                ),
-            }
-        )
+        session = FakeClientSession(upstream_responses())
 
         await spoiler.check_for_updates(as_session(session))
 
         assert len(spoiler.artifacts) == 5
+        _, detail = await spoiler.describe_artifact(
+            next(a for a in spoiler.artifacts if a["id"] == 19)
+        )
+        # 本家テーブルの表示名が使われる
+        assert "+2の修正: 耐久力" in detail
         assert [r["url"].rsplit("/", 1)[-1] for r in session.requests] == [
+            "spoiler-table.cpp",
             "ArtifactDefinitions.jsonc",
             "BaseitemDefinitions.jsonc",
             "activation-info-table.cpp",
         ]
+
+    async def test_生成時に前回取り込んだ本家の定義を残す(self, art_db):
+        # art_db は前回の起動で本家テーブル込みの flag_info を作った状態にあたる
+        spoiler = ArtifactSpoiler(BASE_URL, art_db)
+
+        _, detail = await spoiler.describe_artifact(
+            {"id": 19, "fullname": "魂の守り手", "fullname_en": "Soulkeeper"}
+        )
+
+        assert "+2の修正: 耐久力" in detail
+
+    async def test_本家テーブルを取得できなくても誤った警告を出さない(
+        self, spoiler, caplog
+    ):
+        a_info_txt = read_fixture("ArtifactDefinitions.jsonc").replace(
+            '"XTRA_MIGHT"', '"XTRA_MIGHT", "NEW_UNKNOWN_FLAG"'
+        )
+        session = FakeClientSession(
+            upstream_responses(
+                {
+                    "spoiler-table.cpp": FakeResponse(500),
+                    "ArtifactDefinitions.jsonc": FakeResponse(200, a_info_txt),
+                }
+            )
+        )
+
+        with caplog.at_level(logging.WARNING):
+            await spoiler.check_for_updates(as_session(session))
+
+        # 前回取り込んだ本家の定義が残っているので、本当に未知のフラグだけを警告する
+        assert "Unknown flag(s): NEW_UNKNOWN_FLAG " in caplog.text
+
+    async def test_初回起動で本家テーブルを取得できなくても誤った警告を出さない(
+        self, tmp_path, caplog
+    ):
+        db_path = str(tmp_path / "art.db")
+        spoiler = ArtifactSpoiler(BASE_URL, db_path)
+        session = FakeClientSession(
+            upstream_responses({"spoiler-table.cpp": FakeResponse(500)})
+        )
+
+        with caplog.at_level(logging.WARNING):
+            await spoiler.check_for_updates(as_session(session))
+
+        assert "Unknown flag(s)" not in caplog.text
+
+    async def test_生成時に古いスキーマのflag_infoは作り直す(self, tmp_path):
+        db_path = str(tmp_path / "art.db")
+        create_old_schema_flag_info(db_path)
+
+        ArtifactSpoiler(BASE_URL, db_path)
+
+        assert FlagInfoReader().has_current_flag_info_table(db_path)
 
     async def test_更新がなければ既存のリストを保持する(self, spoiler):
         # 事前にDBは作成済みなので、304応答でもアーティファクトは読み込まれる

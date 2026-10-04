@@ -8,8 +8,10 @@ import logging
 import sqlite3
 
 import pytest
+from conftest import REAL_FLAG_INFO_PATH
 
 from ArtifactInfoReader import ArtifactInfoReader
+from FlagInfoReader import FlagInfoReader
 
 ArtifactInfo = ArtifactInfoReader.ArtifactInfo
 
@@ -186,9 +188,26 @@ class Test_create_a_info_table:
         assert a_count == 5
         assert f_count == 16
 
+    def test_create_a_info_tableは未知のフラグを警告しない(self, art_db, caplog):
+        # 警告は flag_info の作成状況を知っている ArtifactSpoiler が
+        # warn_unknown_flags() で行う
+        a_info_txt = (
+            '{"artifacts": [{"id": 999, "name": {"ja": "あ", "en": "a"},'
+            ' "base_item": {"type_value": 40, "subtype_value": 10},'
+            ' "level": 1, "rarity": 1, "weight": 1, "cost": 1,'
+            ' "flags": ["NEW_UNKNOWN_FLAG"]}]}'
+        )
+        with caplog.at_level(logging.WARNING):
+            ArtifactInfoReader().create_a_info_table(art_db, a_info_txt)
+
+        assert "Unknown flag(s)" not in caplog.text
+
+
+class Test_warn_unknown_flags:
     def test_flag_infoにないフラグは警告ログに出る(self, art_db, caplog):
-        # 本家に新しいフラグが追加されると flag_info.txt の更新が必要になるため、
-        # 未知のフラグを warning で通知している (ChannelLogger経由でDiscordにも流れる)
+        # 本家の spoiler-table.cpp にも flag_info.txt にも定義の無いフラグは
+        # flag_info.txt への追加が必要なため、warning で通知している
+        # (ChannelLogger経由でDiscordにも流れる)
         a_info_txt = """
 {
     "artifacts": [
@@ -202,13 +221,35 @@ class Test_create_a_info_table:
     ]
 }
 """
+        reader = ArtifactInfoReader()
+        reader.create_a_info_table(art_db, a_info_txt)
         with caplog.at_level(logging.WARNING):
-            ArtifactInfoReader().create_a_info_table(art_db, a_info_txt)
+            reader.warn_unknown_flags(art_db)
 
         assert "Unknown flag(s): NEW_UNKNOWN_FLAG" in caplog.text
 
+    def test_本家の定義を取り込むまでは判定しない(
+        self, tmp_path, artifact_defs_txt, caplog
+    ):
+        # flag_info.txt だけの flag_info では、本家テーブルにあるフラグ (CON など)
+        # まで未知と判定してしまう
+        db_path = str(tmp_path / "test.db")
+        FlagInfoReader().create_flag_info_table(
+            db_path, flag_info_path=REAL_FLAG_INFO_PATH
+        )
+        reader = ArtifactInfoReader()
+        reader.create_a_info_table(db_path, artifact_defs_txt)
+
+        with caplog.at_level(logging.INFO):
+            reader.warn_unknown_flags(db_path)
+
+        assert "Unknown flag(s)" not in caplog.text
+        assert "未知のフラグの判定を保留します" in caplog.text
+
     def test_既知のフラグだけなら警告は出ない(self, art_db, artifact_defs_txt, caplog):
+        reader = ArtifactInfoReader()
+        reader.create_a_info_table(art_db, artifact_defs_txt)
         with caplog.at_level(logging.WARNING):
-            ArtifactInfoReader().create_a_info_table(art_db, artifact_defs_txt)
+            reader.warn_unknown_flags(art_db)
 
         assert "Unknown flag(s)" not in caplog.text
