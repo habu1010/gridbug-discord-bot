@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 
+from FlagInfoReader import SOURCE_SPOILER_TABLE
 from Jsonc import parse_jsonc
 
 
@@ -124,10 +125,7 @@ CREATE TABLE a_info_flags(
 CREATE INDEX a_info_flags_index_id ON a_info_flags(id)
 """)
 
-            a_info_flags = set()
-
             for a_info in self.get_a_info_list(a_info_txt):
-                a_info_flags.update(a_info.flags)
                 conn.execute(
                     f"""
 INSERT INTO a_info values(
@@ -152,10 +150,38 @@ INSERT INTO a_info_flags values(:id, :flag)
                         {"id": a_info.id, "flag": flag},
                     )
 
-            # flag_info.txt に登録されていないフラグのチェック
-            known_flags = {
-                row[0] for row in conn.execute("SELECT name FROM flag_info").fetchall()
-            }
-            if unknown_flags := a_info_flags - known_flags:
-                unknown_flags_str = ",".join(unknown_flags)
-                getLogger(__name__).warning(f"Unknown flag(s): {unknown_flags_str}")
+    def warn_unknown_flags(self, db_path: str) -> None:
+        """flag_info.txt にも本家の spoiler-table.cpp にも定義が無いフラグを警告する
+
+        create_a_info_table() と flag_info テーブルの作成が両方済んでいる必要がある。
+        本家の定義をまだ取り込めていない間は、本家テーブルにあるフラグまで
+        未知と判定してしまうので判定しない。
+        """
+        with sqlite3.connect(db_path) as conn:
+            has_spoiler_table = conn.execute(
+                "SELECT 1 FROM flag_info WHERE source = ? LIMIT 1",
+                (SOURCE_SPOILER_TABLE,),
+            ).fetchone()
+            if not has_spoiler_table:
+                getLogger(__name__).info(
+                    "本家の spoiler-table.cpp の定義を取り込むまで"
+                    "未知のフラグの判定を保留します"
+                )
+                return
+
+            unknown_flags = [row[0] for row in conn.execute("""
+SELECT DISTINCT
+    flag
+FROM
+    a_info_flags
+WHERE
+    flag NOT IN (SELECT name FROM flag_info)
+ORDER BY
+    flag
+""")]
+        if unknown_flags:
+            unknown_flags_str = ",".join(unknown_flags)
+            getLogger(__name__).warning(
+                f"Unknown flag(s): {unknown_flags_str}"
+                " (flag_info.txt に表示名を追加してください)"
+            )

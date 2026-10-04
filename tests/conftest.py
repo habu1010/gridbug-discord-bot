@@ -5,6 +5,7 @@ DBは全て pytest の tmp_path 配下に作成する。
 """
 
 import os
+import sqlite3
 import sys
 from typing import Any, cast
 
@@ -22,10 +23,9 @@ import MonsterInfo  # noqa: E402
 import MonsterInfoReader  # noqa: E402
 
 FIXTURES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
-REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # リポジトリの実際のflag_info.txt (回帰テストで実データを検証するために使う)
-REAL_FLAG_INFO_PATH = os.path.join(REPO_DIR, "flag_info.txt")
+REAL_FLAG_INFO_PATH = FlagInfoReader.FLAG_INFO_PATH
 
 
 def fixture_path(name: str) -> str:
@@ -37,6 +37,16 @@ def read_fixture(name: str) -> str:
     """tests/fixtures 配下のファイルの内容を返す"""
     with open(fixture_path(name), encoding="utf-8") as f:
         return f.read()
+
+
+def create_old_schema_flag_info(db_path: str) -> None:
+    """source 列が追加される前のスキーマで flag_info テーブルを作る"""
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE flag_info("
+            "name TEXT PRIMARY KEY, flag_group TEXT,"
+            " id_in_group INTEGER, description TEXT)"
+        )
 
 
 @pytest.fixture
@@ -55,20 +65,32 @@ def activation_table_src() -> str:
 
 
 @pytest.fixture
+def spoiler_table_src() -> str:
+    return read_fixture("spoiler-table.cpp")
+
+
+@pytest.fixture
 def mon_info_txt() -> str:
     return read_fixture("mon-info.txt")
 
 
 @pytest.fixture
-def art_db(tmp_path, artifact_defs_txt, baseitem_defs_txt, activation_table_src) -> str:
+def art_db(
+    tmp_path,
+    artifact_defs_txt,
+    baseitem_defs_txt,
+    activation_table_src,
+    spoiler_table_src,
+) -> str:
     """アーティファクト情報の全テーブルを作成した一時DBのパスを返す
 
-    ArtifactInfoReader.create_a_info_table() は flag_info テーブルを参照するため、
-    FlagInfoReader を最初に実行する必要がある。
+    flag_info は実際の flag_info.txt と、本家 spoiler-table.cpp の縮小版から作る。
     """
     db_path = str(tmp_path / "art-info-test.db")
 
-    FlagInfoReader.FlagInfoReader().create_flag_info_table(db_path, REAL_FLAG_INFO_PATH)
+    FlagInfoReader.FlagInfoReader().create_flag_info_table(
+        db_path, spoiler_table_src, REAL_FLAG_INFO_PATH
+    )
     KindInfoReader.KindInfoReader().create_k_info_table(db_path, baseitem_defs_txt)
     ActivationInfoReader.ActivationInfoReader().create_activation_info_table(
         db_path, activation_table_src
@@ -77,14 +99,6 @@ def art_db(tmp_path, artifact_defs_txt, baseitem_defs_txt, activation_table_src)
         db_path, artifact_defs_txt
     )
 
-    return db_path
-
-
-@pytest.fixture
-def flag_info_db(tmp_path) -> str:
-    """flag_info テーブルのみを作成した一時DBのパスを返す"""
-    db_path = str(tmp_path / "flag-info-test.db")
-    FlagInfoReader.FlagInfoReader().create_flag_info_table(db_path, REAL_FLAG_INFO_PATH)
     return db_path
 
 

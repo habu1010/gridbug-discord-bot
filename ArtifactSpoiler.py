@@ -18,6 +18,9 @@ from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
 if TYPE_CHECKING:
     from bot import Bot
 
+SPOILER_TABLE_FILE = "src/wizard/spoiler-table.cpp"
+ARTIFACT_DEFINITIONS_FILE = "lib/edit/ArtifactDefinitions.jsonc"
+
 
 class ArtifactSpoiler(commands.Cog):
     def __init__(self, base_url: str, db_path: str):
@@ -25,10 +28,13 @@ class ArtifactSpoiler(commands.Cog):
         self.db_path = db_path
         self.etags: dict[str, str] = {}
 
-        FlagInfoReader.FlagInfoReader().create_flag_info_table(
-            db_path,
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "flag_info.txt"),
-        )
+        # 初回起動時は、本家の spoiler-table.cpp を取得するまで flag_info.txt の定義
+        # だけで作っておく。既にあれば前回取り込んだ本家の定義ごと残す。起動直後の
+        # check_for_updates() で本家から作り直されるが、その取得に失敗しても表示名と
+        # 未知フラグの判定が崩れないようにするため (スキーマが古い場合は作り直す)
+        flag_info_reader = FlagInfoReader.FlagInfoReader()
+        if not flag_info_reader.has_current_flag_info_table(db_path):
+            flag_info_reader.create_flag_info_table(db_path)
 
         self._artifacts: list[ListSearch.Item] = []
 
@@ -141,7 +147,6 @@ ORDER BY
         detail += self.describe_flag_group(flags, "耐性: ", "RESISTANCE")
         detail += self.describe_flag_group(flags, "弱点: ", "VULNERABILITY")
         detail += self.describe_flag_group(flags, "維持: ", "SUSTAIN_STATUS")
-        detail += self.describe_flag_group(flags, "感知: ", "ESP")
         detail += self.describe_flag_group(flags, "", "POWER")
         detail += self.describe_flag_group(flags, "", "MISC")
         detail += self.describe_flag_group(flags, "", "CURSE")
@@ -220,27 +225,41 @@ ORDER BY
             return await res.text()
 
     async def check_for_updates(self, session: aiohttp.ClientSession) -> None:
-        file_list = [
-            "lib/edit/ArtifactDefinitions.jsonc",
-            "lib/edit/BaseitemDefinitions.jsonc",
-            "src/object-enchant/activation-info-table.cpp",
-        ]
-        updaters = [
-            ArtifactInfoReader.ArtifactInfoReader().create_a_info_table,
-            KindInfoReader.KindInfoReader().create_k_info_table,
-            ActivationInfoReader.ActivationInfoReader().create_activation_info_table,
-        ]
-        downloaded_files = await asyncio.gather(
-            *[self.download_file(session, f) for f in file_list]
+        updaters = {
+            SPOILER_TABLE_FILE: FlagInfoReader.FlagInfoReader().create_flag_info_table,
+            ARTIFACT_DEFINITIONS_FILE: (
+                ArtifactInfoReader.ArtifactInfoReader().create_a_info_table
+            ),
+            "lib/edit/BaseitemDefinitions.jsonc": (
+                KindInfoReader.KindInfoReader().create_k_info_table
+            ),
+            "src/object-enchant/activation-info-table.cpp": (
+                ActivationInfoReader.ActivationInfoReader().create_activation_info_table
+            ),
+        }
+        texts = await asyncio.gather(
+            *[self.download_file(session, f) for f in updaters]
         )
+        downloaded_files = dict(zip(updaters, texts))
 
-        for text, updater in zip(downloaded_files, updaters):
-            if text:
-                loop = asyncio.get_running_loop()
+        loop = asyncio.get_running_loop()
+        for filepath, updater in updaters.items():
+            if text := downloaded_files[filepath]:
                 await loop.run_in_executor(None, updater, self.db_path, text)
 
-        if any(downloaded_files) or not self._artifacts:
-            # file_listのいずれかのファイルが更新されている、もしくはアーティファクト情報が
+        # 未知のフラグの警告は、flag_info か a_info が更新された時に行う
+        if (
+            downloaded_files[SPOILER_TABLE_FILE]
+            or downloaded_files[ARTIFACT_DEFINITIONS_FILE]
+        ):
+            await loop.run_in_executor(
+                None,
+                ArtifactInfoReader.ArtifactInfoReader().warn_unknown_flags,
+                self.db_path,
+            )
+
+        if any(downloaded_files.values()) or not self._artifacts:
+            # いずれかのファイルが更新されている、もしくはアーティファクト情報が
             # 未ロードなら、アーティファクト情報を読み込む
             self._artifacts = await self.load_artifacts()
 
