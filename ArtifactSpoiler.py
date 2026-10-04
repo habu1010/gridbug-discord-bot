@@ -102,19 +102,21 @@ WHERE
             ) as c:
                 a_info = await c.fetchone()
             # describe_flag_group() が同じ結果を何度も走査するためリストにする
+            # 表示名の定義が無いフラグは、フラグ名そのままで MISC の末尾に表示する
             flags = list(
                 await conn.execute_fetchall(
                     """
 SELECT
-    *
+    COALESCE(flag_info.flag_group, 'MISC') AS flag_group,
+    COALESCE(flag_info.description, a_info_flags.flag) AS description
 FROM
     a_info_flags
-    JOIN flag_info ON a_info_flags.flag = flag_info.name
+    LEFT JOIN flag_info ON a_info_flags.flag = flag_info.name
 WHERE
     a_info_flags.id = :id
 ORDER BY
     flag_group,
-    id_in_group
+    flag_info.id_in_group NULLS LAST
 """,
                     {"id": art["id"]},
                 )
