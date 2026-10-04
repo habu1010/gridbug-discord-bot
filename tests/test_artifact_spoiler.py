@@ -6,6 +6,8 @@ DBからアーティファクト情報を組み立てる非同期メソッドを
 ArtifactSpoilerCog は __init__ で checker_task を起動するためテストでは生成しない。
 """
 
+import sqlite3
+
 import pytest
 from conftest import FakeClientSession, FakeResponse, as_session, read_fixture
 
@@ -285,6 +287,21 @@ class Test_describe_artifact:
             < detail.index("耐性:")
             < detail.index("経験値維持")
         )
+
+    async def test_表示名の定義が無いフラグはフラグ名をMISCの末尾に表示する(
+        self, spoiler, art_db
+    ):
+        with sqlite3.connect(art_db) as conn:
+            conn.executemany(
+                "INSERT INTO a_info_flags VALUES(19, :flag)",
+                [{"flag": "NEW_UNKNOWN_FLAG"}, {"flag": "TELEPORT"}],
+            )
+        art = await self.get_art(spoiler, 19)
+
+        _, detail = await spoiler.describe_artifact(art)
+
+        # flag_info.txt の定義順 (経験値維持 -> 乱テレポート) -> 未定義 の順
+        assert "経験値維持, 乱テレポート, NEW_UNKNOWN_FLAG\n" in detail
 
     async def test_詳細が見つからない場合はメッセージを返す(self, spoiler):
         main, detail = await spoiler.describe_artifact(
