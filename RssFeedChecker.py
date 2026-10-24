@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import os
+import re
 import time
 from logging import getLogger
 from operator import itemgetter
@@ -104,8 +105,15 @@ class PukiwikiRssChecker(RssChecker):
 
 
 class HengscoreRssChecker(RssChecker):
+    # 記事のタイトルの形式: "<性格><名前> Score:<スコア> <種族> <職業> <結果>"
+    # 名前と結果 (死因など) には空白が含まれることがある
+    TITLE_PATTERN = re.compile(
+        r"(?P<name>.+) Score:(?P<score>\d+) (?P<race>\S+) (?P<class>\S+) (?P<result>.+)"
+    )
+
     def build_embed(self, item: FeedParserDict) -> discord.Embed:
         embed = super().build_embed(item)
+        self.add_score_fields(embed, cast(str, item["title"]))
         link = cast(str, item.get("link", ""))
         # ダンプ (/scores/<id>/dump) と同じ階層にスクリーン (/scores/<id>/screen) がある。
         # 想定と違う形のリンクでは、存在しないページを指さないようスクリーンのリンクを付けない
@@ -113,6 +121,32 @@ class HengscoreRssChecker(RssChecker):
             screen_url = link.removesuffix("/dump") + "/screen"
             embed.description = f":camera:[screen]({screen_url})"
         return embed
+
+    def add_score_fields(self, embed: discord.Embed, title: str) -> None:
+        """タイトルを分解して、名前をタイトルに、スコアなどをフィールドに並べる
+
+        想定と違う形式のタイトルは、そのままにする。
+        """
+        m = self.TITLE_PATTERN.fullmatch(title)
+        if m is None:
+            return
+
+        # 名前はプレイヤーが自由に付けるので、マークダウンの記号をエスケープする
+        name = discord.utils.escape_markdown(m["name"])
+        result = m["result"]
+        victory = result.startswith("勝利")
+        # 帯の色だけでは目立たないので、勝利したキャラクターはタイトルにもトロフィーを付ける
+        embed.title = f"🏆 {name}" if victory else name
+        embed.add_field(name="スコア", value=f"{int(m['score']):,}")
+        embed.add_field(name="種族", value=m["race"])
+        embed.add_field(name="職業", value=m["class"])
+        embed.add_field(
+            name="結果", value=discord.utils.escape_markdown(result), inline=False
+        )
+        if victory:
+            embed.color = discord.Color.gold()
+        elif result.endswith("殺された"):
+            embed.color = discord.Color.red()
 
 
 class RssCheckCog(commands.Cog):
