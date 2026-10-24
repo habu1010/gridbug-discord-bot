@@ -3,6 +3,7 @@ import datetime
 import json
 import os
 import re
+import textwrap
 import time
 from logging import getLogger
 from operator import itemgetter
@@ -14,6 +15,8 @@ import discord
 import feedparser
 from discord.ext import commands, tasks
 from feedparser.util import FeedParserDict
+
+from utils import limit_str_length
 
 if TYPE_CHECKING:
     from bot import Bot
@@ -110,10 +113,17 @@ class HengscoreRssChecker(RssChecker):
     TITLE_PATTERN = re.compile(
         r"(?P<name>.+) Score:(?P<score>\d+) (?P<race>\S+) (?P<class>\S+) (?P<result>.+)"
     )
+    # 記事の本文の先頭の見出し。勝利したキャラクターでは、この後に勝利メッセージが続く
+    # (死亡したキャラクターの本文は死ぬ直前のメッセージで、長いので表示しない)
+    VICTORY_MESSAGE_HEADER = "[*勝利*メッセージ]"
+    # 勝利メッセージの表示の上限。Embed のフィールドの値の上限は1024文字だが、
+    # マークダウンのエスケープで最大2倍の長さになるため、その半分で切り詰めてからエスケープする
+    MAX_VICTORY_MESSAGE_LENGTH = 1024 // 2
 
     def build_embed(self, item: FeedParserDict) -> discord.Embed:
         embed = super().build_embed(item)
         self.add_score_fields(embed, cast(str, item["title"]))
+        self.add_victory_message(embed, item)
         link = cast(str, item.get("link", ""))
         # ダンプ (/scores/<id>/dump) と同じ階層にスクリーン (/scores/<id>/screen) がある。
         # 想定と違う形のリンクでは、存在しないページを指さないようスクリーンのリンクを付けない
@@ -147,6 +157,29 @@ class HengscoreRssChecker(RssChecker):
             embed.color = discord.Color.gold()
         elif result.endswith("殺された"):
             embed.color = discord.Color.red()
+
+    def add_victory_message(self, embed: discord.Embed, item: FeedParserDict) -> None:
+        """本文が勝利メッセージなら、フィールドに表示する"""
+        contents = cast(list[FeedParserDict], item.get("content", []))
+        if not contents:
+            return
+        # 実際のフィードの本文は空白で始まる (feedparser が取り除くが、それに頼らない)
+        body = cast(str, contents[0]["value"]).lstrip()
+        if not body.startswith(self.VICTORY_MESSAGE_HEADER):
+            return
+
+        # 本文はインデントされているので、行頭の共通の空白を取り除く
+        message = textwrap.dedent(body.removeprefix(self.VICTORY_MESSAGE_HEADER))
+        message = message.strip()
+        if not message:
+            return
+        embed.add_field(
+            name="勝利メッセージ",
+            value=discord.utils.escape_markdown(
+                limit_str_length(message, self.MAX_VICTORY_MESSAGE_LENGTH)
+            ),
+            inline=False,
+        )
 
 
 class RssCheckCog(commands.Cog):
