@@ -24,6 +24,9 @@ if TYPE_CHECKING:
 
 class RssChecker:
     RECORD_DIR = os.path.expanduser("~/.rss_checker")
+    # 問題がこの回数続いたら報告する。一瞬の障害 (通信の瞬断など) は報告せず、
+    # 次の確認で取り直す
+    REPORT_AFTER_REPEATS = 2
 
     def __init__(self, name: str, url: str, send_channel_id: int):
         self.name = name
@@ -32,6 +35,12 @@ class RssChecker:
         os.makedirs(self.RECORD_DIR, exist_ok=True)
         self.record_path = os.path.join(self.RECORD_DIR, name) + ".json"
         self.__load_record()
+        # 直前に報告した問題の種類 (報告していなければ None) と、それとは別の種類の
+        # 問題が続いている回数
+        self.last_problem: str | None = None
+        self.repeats = 0
+        # 直前の確認で更新日時を読めずに読み飛ばした記事の数
+        self.last_skipped = 0
 
     def __load_record(self) -> None:
         try:
@@ -44,11 +53,38 @@ class RssChecker:
         with open(self.record_path, "w") as f:
             json.dump(self.record, f)
 
+    def report_problem(self, problem: str, detail: str, exc_info: bool = False) -> None:
+        """フィードの問題をログに出す
+
+        フィードは毎分確認し、ログは ChannelLogger 経由で Discord にも流れるため、
+        直前に報告したのと同じ種類 (problem) の問題は、詳細 (detail) が違っても
+        繰り返し出さない。別の種類の問題は REPORT_AFTER_REPEATS 回続くまで出さない。
+        """
+        if problem == self.last_problem:
+            self.repeats = 0
+            return
+        self.repeats += 1
+        if self.repeats < self.REPORT_AFTER_REPEATS:
+            return
+        getLogger(__name__).warning(
+            f"{self.name}: {problem} ({detail})", exc_info=exc_info
+        )
+        self.last_problem = problem
+        self.repeats = 0
+
+    def report_ok(self) -> None:
+        """フィードを問題なく確認できたことを記録し、問題が続いていた場合は復旧をログに出す"""
+        if self.last_problem is not None:
+            getLogger(__name__).warning(f"{self.name}: 復旧しました")
+        self.last_problem = None
+        self.repeats = 0
+
     async def get_new_items(
         self, cs: aiohttp.ClientSession, max: int
     ) -> list[FeedParserDict]:
         async with cs.get(self.url) as res:
             if res.status != 200:
+                self.report_problem("フィードを取得できません", f"HTTP {res.status}")
                 return []
             body = await res.text()
             # リダイレクトされた場合は移転先のURLになる
@@ -57,13 +93,13 @@ class RssChecker:
         try:
             feed = feedparser.parse(body)
         except Exception as e:
-            # Feed取得エラー
-            getLogger(__name__).warning(e.args)
+            self.report_problem("フィードを解析できません", repr(e))
             return []
 
         if feed.bozo:
-            # Feedパースエラー
-            getLogger(__name__).warning(feed.bozo_exception)
+            # XML の解析エラーの位置 (行・桁) は str() にしか含まれない
+            e = feed.bozo_exception
+            self.report_problem("フィードを解析できません", f"{type(e).__name__}: {e}")
             return []
 
         # リンクが相対URLのフィード (新しいHengscoreなど) もあるため、
@@ -72,24 +108,52 @@ class RssChecker:
             if i.get("link"):
                 i["link"] = urljoin(base_url, cast(str, i["link"]))
 
-        self.add_last_updated_time(feed)
+        dated_items = self.add_last_updated_time(feed)
+        skipped = len(feed.entries) - len(dated_items)
         # FeedParserDict は dict のサブクラスで属性アクセスは型情報を持たないため、
         # 添字アクセスで扱う (実行時の挙動は属性アクセスと同じ)
-        new_items: list[FeedParserDict] = [
+        new_items = [
             i
-            for i in feed.entries
+            for i in dated_items
             if i["last_updated_time"] > self.record["last_updated_time"]
         ]
         if len(new_items) > 0:
             new_items.sort(key=itemgetter("last_updated_time"), reverse=True)
             self.record["last_updated_time"] = new_items[0]["last_updated_time"]
             self.__save_record()
+
+        self.report_ok()
+        # 読み飛ばしはフィードの取得の問題とは別に、件数が変わった時だけ報告する
+        # (日付の無い記事が残り続けても、取得の問題の復旧が分かるように)
+        if skipped > 0 and skipped != self.last_skipped:
+            getLogger(__name__).warning(
+                f"{self.name}: 更新日時を読めない記事を {skipped} 件読み飛ばしました"
+            )
+        self.last_skipped = skipped
         return new_items[:max]
 
-    def add_last_updated_time(self, d: FeedParserDict) -> None:
+    def add_last_updated_time(self, d: FeedParserDict) -> list[FeedParserDict]:
+        """各記事に更新時刻 (last_updated_time) を付ける
+
+        更新日時を読めない記事は、フィード全体を捨てずにその記事だけを読み飛ばす
+        (last_updated_time を付けない)。
+
+        Returns:
+            更新時刻を付けられた記事のリスト
+        """
+        dated_items: list[FeedParserDict] = []
         for i in d.entries:
-            updated = cast(time.struct_time, i["updated_parsed"])
-            i["last_updated_time"] = datetime.datetime(*updated[:6]).timestamp()
+            try:
+                i["last_updated_time"] = self.get_updated_time(i)
+            except (KeyError, TypeError, ValueError, OverflowError, OSError):
+                # OverflowError / OSError は timestamp() が範囲外の日付で出す
+                continue
+            dated_items.append(i)
+        return dated_items
+
+    def get_updated_time(self, entry: FeedParserDict) -> float:
+        updated = cast(time.struct_time, entry["updated_parsed"])
+        return datetime.datetime(*updated[:6]).timestamp()
 
     def build_embed(self, item: FeedParserDict) -> discord.Embed:
         # link の無い (または空の) 記事は、リンクなしで通知する
@@ -99,12 +163,11 @@ class RssChecker:
 
 
 class PukiwikiRssChecker(RssChecker):
-    def add_last_updated_time(self, d: FeedParserDict) -> None:
-        for i in d.entries:
-            summary = cast(str, i["summary"])
-            i["last_updated_time"] = datetime.datetime.strptime(
-                summary, "%a, %d %b %Y %H:%M:%S %Z"
-            ).timestamp()
+    def get_updated_time(self, entry: FeedParserDict) -> float:
+        summary = cast(str, entry["summary"])
+        return datetime.datetime.strptime(
+            summary, "%a, %d %b %Y %H:%M:%S %Z"
+        ).timestamp()
 
 
 class HengscoreRssChecker(RssChecker):
@@ -202,7 +265,11 @@ class RssCheckCog(commands.Cog):
                 checker_class(feed["name"], feed["url"], feed["channel_id"])
             )
 
-        self.client_session = aiohttp.ClientSession()
+        # 応答しないフィードが1つあると、gather で待つ他のフィードの通知まで遅れるので、
+        # aiohttp の既定 (300秒) より短く打ち切る
+        self.client_session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30)
+        )
         self.bot = bot
 
         self.checker_task.start()
@@ -213,21 +280,37 @@ class RssCheckCog(commands.Cog):
 
     @tasks.loop(seconds=60.0)
     async def checker_task(self) -> None:
-        new_items_list = await asyncio.gather(
-            *[c.get_new_items(self.client_session, 5) for c, _ in self.targets]
+        await asyncio.gather(
+            *[self.check_feed(checker, channel) for checker, channel in self.targets]
         )
 
-        for (checker, channel), new_items in zip(self.targets, new_items_list):
-            for item in new_items:
-                # 1件の失敗でタスクごと止まって全フィードの通知が途絶えないよう、
-                # 記事ごとに例外を捕まえてログに残し、次の記事へ進む
-                try:
-                    await channel.send(embed=checker.build_embed(item))
-                except Exception:
-                    getLogger(__name__).exception(
-                        f"{checker.name}: 記事を送信できませんでした"
-                        f" ({item.get('title')})"
-                    )
+    async def check_feed(
+        self, checker: RssChecker, channel: discord.abc.Messageable
+    ) -> None:
+        """1つのフィードの新着を確認して送信する
+
+        失敗してもタスクごと止まって全フィードの通知が途絶えないよう、
+        フィードごと・記事ごとに例外を捕まえてログに残す。
+        """
+        try:
+            new_items = await checker.get_new_items(self.client_session, 5)
+        except Exception as e:
+            checker.report_problem(
+                # str() だと TimeoutError などはメッセージが空になるので repr で出す
+                "フィードを確認できません",
+                repr(e),
+                exc_info=True,
+            )
+            return
+
+        for item in new_items:
+            try:
+                await channel.send(embed=checker.build_embed(item))
+            except Exception:
+                getLogger(__name__).exception(
+                    f"{checker.name}: 記事を送信できませんでした"
+                    f" ({item.get('title')})"
+                )
 
     @checker_task.before_loop
     async def before_checker_task(self) -> None:

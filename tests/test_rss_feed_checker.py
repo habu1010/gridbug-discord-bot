@@ -56,6 +56,12 @@ ITEMS = [
     ("記事3", "https://example.invalid/3", "Wed, 03 Jan 2024 00:00:00 GMT"),
 ]
 
+# ITEMS のうち「記事1」だけ更新日時 (pubDate) の無い RSS
+UNDATED_RSS = build_rss(ITEMS).replace(
+    "<pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>", ""
+)
+assert UNDATED_RSS != build_rss(ITEMS)
+
 
 @pytest.fixture(autouse=True)
 def record_dir(tmp_path, monkeypatch):
@@ -181,6 +187,20 @@ class Test_get_new_items:
         # 別インスタンスでも記録を引き継ぐ
         assert make_checker().record == saved
 
+    async def test_更新日時の無い記事を除いて返し警告を出す(self, caplog):
+        checker = make_checker(name="日付なし")
+        session = FakeClientSession(FakeResponse(200, UNDATED_RSS))
+
+        with caplog.at_level(logging.WARNING):
+            new_items = await checker.get_new_items(as_session(session), 5)
+            # 件数が変わらなければ繰り返し出さない
+            await checker.get_new_items(as_session(session), 5)
+
+        assert [i.title for i in new_items] == ["記事3", "記事2"]
+        assert caplog.messages == [
+            "日付なし: 更新日時を読めない記事を 1 件読み飛ばしました"
+        ]
+
     async def test_ステータスが200以外なら空になる(self):
         checker = make_checker()
         session = FakeClientSession(FakeResponse(404))
@@ -192,6 +212,8 @@ class Test_get_new_items:
         session = FakeClientSession(FakeResponse(200, "<rss><不正なXML>"))
 
         with caplog.at_level(logging.WARNING):
+            # 問題は2回続いてから報告する
+            await checker.get_new_items(as_session(session), 5)
             new_items = await checker.get_new_items(as_session(session), 5)
 
         assert new_items == []
@@ -229,14 +251,22 @@ class Test_add_last_updated_time:
         # description(summary) の日時文字列を解釈する
         assert feed.entries[0].last_updated_time == to_timestamp(2024, 1, 1)
 
-    def test_pukiwikiでsummaryの書式が違えば例外になる(self):
+    def test_pukiwikiでsummaryの書式が違う記事は読み飛ばす(self):
         checker = make_checker(PukiwikiRssChecker)
         feed = feedparser.parse(
-            build_rss([("記事", "https://example.invalid/1", "2024/01/01")])
+            build_rss([("記事", "https://example.invalid/1", "2024/01/01")] + ITEMS[:1])
         )
 
-        with pytest.raises(ValueError):
-            checker.add_last_updated_time(feed)
+        assert checker.add_last_updated_time(feed) == [feed.entries[1]]
+        assert "last_updated_time" not in feed.entries[0]
+        assert feed.entries[1].last_updated_time == to_timestamp(2024, 1, 1)
+
+    def test_更新日時の無い記事は読み飛ばす(self):
+        checker = make_checker()
+        feed = feedparser.parse(UNDATED_RSS)
+
+        assert checker.add_last_updated_time(feed) == feed.entries[1:]
+        assert "last_updated_time" not in feed.entries[0]
 
 
 class Test_build_embed:
@@ -416,18 +446,128 @@ class FakeChannel:
         self.sent.append(embed.title)
 
 
+def make_cog(*targets: tuple[RssChecker, FakeChannel]) -> RssCheckCog:
+    """targets のフィードとチャンネルを確認する RssCheckCog を作る
+
+    フィードの取得には、どの URL にも ITEMS の RSS を返すセッションを使う。
+    """
+    cog = RssCheckCog.__new__(RssCheckCog)
+    cog.client_session = as_session(
+        FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
+    )
+    cog.targets = [
+        (checker, cast(discord.abc.Messageable, channel))
+        for checker, channel in targets
+    ]
+    return cog
+
+
 class Test_checker_task:
     async def test_送信に失敗した記事があっても残りの記事を送る(self, caplog):
         checker = make_checker(name="失敗あり")
         channel = FakeChannel(fail_titles=("記事2",))
-        cog = RssCheckCog.__new__(RssCheckCog)
-        cog.client_session = as_session(
-            FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
-        )
-        cog.targets = [(checker, cast(discord.abc.Messageable, channel))]
+        cog = make_cog((checker, channel))
 
         with caplog.at_level(logging.ERROR):
             await RssCheckCog.checker_task.coro(cog)
 
         assert channel.sent == ["記事3", "記事1"]
         assert "失敗あり: 記事を送信できませんでした (記事2)" in caplog.text
+
+    async def test_例外を出したフィードがあっても他のフィードは送る(
+        self, caplog, monkeypatch
+    ):
+        broken = make_checker(name="壊れたフィード")
+
+        async def raise_error(cs, max):
+            raise KeyError("updated_parsed")
+
+        monkeypatch.setattr(broken, "get_new_items", raise_error)
+        healthy = make_checker(name="正常なフィード")
+        broken_channel = FakeChannel()
+        healthy_channel = FakeChannel()
+        cog = make_cog((broken, broken_channel), (healthy, healthy_channel))
+
+        with caplog.at_level(logging.WARNING):
+            await RssCheckCog.checker_task.coro(cog)
+            await RssCheckCog.checker_task.coro(cog)
+
+        assert broken_channel.sent == []
+        assert healthy_channel.sent == ["記事3", "記事2", "記事1"]
+        # 毎回同じ問題なので、報告は1回だけ。トレースバックも付ける
+        assert caplog.records[0].exc_info is not None
+        assert caplog.messages == [
+            "壊れたフィード: フィードを確認できません (KeyError('updated_parsed'))"
+        ]
+
+
+class Test_問題の報告:
+    async def test_同じ問題は1回だけ報告し復旧したら1回だけ知らせる(self, caplog):
+        checker = make_checker(name="フィード")
+        not_found = FakeClientSession(FakeResponse(404))
+        ok = FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
+
+        with caplog.at_level(logging.WARNING):
+            await checker.get_new_items(as_session(not_found), 5)
+            await checker.get_new_items(as_session(not_found), 5)
+            await checker.get_new_items(as_session(ok), 5)
+            await checker.get_new_items(as_session(ok), 5)
+
+        assert caplog.messages == [
+            "フィード: フィードを取得できません (HTTP 404)",
+            "フィード: 復旧しました",
+        ]
+
+    async def test_一度だけの問題は報告しない(self, caplog):
+        checker = make_checker(name="フィード")
+        not_found = FakeClientSession(FakeResponse(404))
+        ok = FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
+
+        with caplog.at_level(logging.WARNING):
+            await checker.get_new_items(as_session(not_found), 5)
+            await checker.get_new_items(as_session(ok), 5)
+
+        assert caplog.messages == []
+
+    async def test_読み飛ばしが続いていても取得の問題と復旧を知らせる(self, caplog):
+        checker = make_checker(name="フィード")
+        skipping = FakeClientSession(FakeResponse(200, UNDATED_RSS))
+        unavailable = FakeClientSession(FakeResponse(503))
+
+        with caplog.at_level(logging.WARNING):
+            for session in (skipping, unavailable, unavailable, skipping, skipping):
+                await checker.get_new_items(as_session(session), 5)
+
+        assert caplog.messages == [
+            "フィード: 更新日時を読めない記事を 1 件読み飛ばしました",
+            "フィード: フィードを取得できません (HTTP 503)",
+            "フィード: 復旧しました",
+        ]
+
+    async def test_同じ種類の問題は詳細が変わっても続いていれば1回だけ報告する(
+        self, caplog
+    ):
+        checker = make_checker(name="フィード")
+
+        with caplog.at_level(logging.WARNING):
+            for status in (502, 503, 502, 503, 502):
+                session = FakeClientSession(FakeResponse(status))
+                await checker.get_new_items(as_session(session), 5)
+
+        assert caplog.messages == ["フィード: フィードを取得できません (HTTP 503)"]
+
+    async def test_問題の種類が変われば改めて報告する(self, caplog):
+        checker = make_checker(name="フィード")
+        not_found = FakeClientSession(FakeResponse(404))
+        broken = FakeClientSession(FakeResponse(200, "<rss><不正なXML>"))
+
+        with caplog.at_level(logging.WARNING):
+            for session in (not_found, not_found, broken, broken):
+                await checker.get_new_items(as_session(session), 5)
+
+        assert caplog.messages == [
+            "フィード: フィードを取得できません (HTTP 404)",
+            # XML の解析エラーは位置 (行・桁) も出す
+            "フィード: フィードを解析できません"
+            " (SAXParseException: <unknown>:2:13: no element found)",
+        ]
