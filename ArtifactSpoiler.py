@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 import aiosqlite
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 
 import ActivationInfoReader
@@ -311,22 +312,61 @@ class ArtifactSpoilerCog(commands.Cog):
             await ctx.send_help(ctx.command)
             return
 
-        spoiler = (
-            self.spoilers["develop"]
-            if parse_result.develop
-            else self.spoilers["master"]
+        await self.search_artifact(
+            ctx,
+            parse_result.artifact_name,
+            parse_result.english,
+            parse_result.develop,
         )
 
+    @app_commands.command(name="art", description="アーティファクトを検索する")
+    @app_commands.describe(
+        name="検索するアーティファクトの名称の一部",
+        english="英語名で検索する",
+        develop="開発(develop)ブランチを検索する",
+    )
+    async def art_slash(
+        self,
+        interaction: discord.Interaction,
+        name: str,
+        english: bool = False,
+        develop: bool = False,
+    ) -> None:
+        ctx = await commands.Context.from_interaction(interaction)
+        # 3秒以内に応答しないとインタラクションが失敗するため、先に応答を保留しておく
+        await ctx.defer()
+        await self.search_artifact(ctx, name, english, develop)
+
+    @art_slash.autocomplete("name")
+    async def art_name_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        spoiler = self.get_spoiler(bool(interaction.namespace.develop))
+        return ListSearch.autocomplete_choices(
+            spoiler.artifacts,
+            current,
+            "fullname",
+            "fullname_en",
+            bool(interaction.namespace.english),
+        )
+
+    def get_spoiler(self, develop: bool) -> ArtifactSpoiler:
+        return self.spoilers["develop"] if develop else self.spoilers["master"]
+
+    async def search_artifact(
+        self, ctx: commands.Context, name: str, english: bool, develop: bool
+    ) -> None:
+        spoiler = self.get_spoiler(develop)
         await ListSearch.search(
             ctx,
             self.send_artifact_info,
             self.send_error,
             spoiler,
             spoiler.artifacts,
-            parse_result.artifact_name,
+            name,
             "fullname",
             "fullname_en",
-            parse_result.english,
+            english,
         )
 
     async def send_artifact_info(

@@ -2,6 +2,7 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from fuzzywuzzy import fuzz
 
@@ -42,15 +43,81 @@ class SelectButton(discord.ui.Button):
         self.item = item
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        if (interaction.message is None) or not isinstance(self.view, SelectView):
+        if not isinstance(self.view, SelectView):
             return
         if interaction.user.id != self.view.ctx.message.author.id:
             return
 
-        await interaction.message.delete()
+        # 候補のメッセージは、インタラクションに応答してから webhook 経由で消す。
+        # チャンネル経由で消すと、bot がチャンネルを見られない場合 (スラッシュコマンドは
+        # その場合でも使える) に権限が無く失敗するため
+        await interaction.response.defer()
+        await interaction.delete_original_response()
 
         view = self.view
         await view.on_selected(view.ctx, self.item, view.callback_arg)
+
+
+def find_candidates(
+    items: list[Item],
+    search_str: str,
+    name_key: str,
+    ename_key: str,
+    english: bool = False,
+) -> tuple[list[Item], str]:
+    """search_str を名前に部分一致で含む要素を探す
+
+    まず name_key で探し、一致しなければ ename_key で大文字小文字を区別せずに探す。
+    ただし、english が True の場合は ename_key でのみ探す。
+
+    Returns:
+        一致した要素のリストと、一致を判定したキー
+    """
+    if not english:
+        candidates = [i for i in items if search_str in i[name_key]]
+        if candidates:
+            return candidates, name_key
+
+    search_str = search_str.lower()
+    return [i for i in items if search_str in str.lower(i[ename_key])], ename_key
+
+
+# Discord のオートコンプリートの候補数と、候補の名前・値の文字数の上限
+MAX_CHOICES = 25
+MAX_CHOICE_LENGTH = 100
+
+
+def autocomplete_choices(
+    items: list[Item],
+    current: str,
+    name_key: str,
+    ename_key: str,
+    english: bool = False,
+) -> list[app_commands.Choice[str]]:
+    """スラッシュコマンドの名前の引数に出すオートコンプリートの候補を作る
+
+    search() と同じく部分一致で探し、前方一致するものを先に並べる。
+    候補の値は名前そのもの (上限を超える分は切り捨て) なので、
+    選ばれた値で search() を呼べば完全一致か部分一致でその要素が見つかる。
+    """
+    if not current:
+        return []
+
+    candidates, matched_key = find_candidates(
+        items, current, name_key, ename_key, english
+    )
+    # sorted は安定なので、前方一致・部分一致それぞれの中では元の並びを保つ
+    current = current.lower()
+    candidates = sorted(
+        candidates, key=lambda i: not str(i[matched_key]).lower().startswith(current)
+    )
+    names = [str(i[matched_key]) for i in candidates[:MAX_CHOICES]]
+    return [
+        app_commands.Choice(
+            name=limit_str_length(n, MAX_CHOICE_LENGTH), value=n[:MAX_CHOICE_LENGTH]
+        )
+        for n in names
+    ]
 
 
 async def search[T](
@@ -71,8 +138,7 @@ async def search[T](
     部分一致で検索し、複数の候補があった場合は候補を表示して選択させる。
     部分一致で一致するものがなかった場合は曖昧検索により候補を表示して選択させる。
 
-    部分一致検索は、まず辞書のキーをname_keyで検索し、一致しなければename_keyにより検索する。
-    ただし、englishがTrueの場合はename_keyのみ検索する。
+    部分一致の判定の規則は find_candidates() を参照。
 
     Args:
         ctx (commands.Context): コマンド実行コンテキスト
@@ -84,25 +150,17 @@ async def search[T](
         ename_key (str): 英語名検索の時に参照する辞書のキー
         english (bool, optional): 英語名検索をする. Defaults to False.
     """
-    candidates: list[Item] = []
-    matched_key = name_key
-
-    if not english:
-        candidates = [i for i in items if search_str in i[name_key]]
-    if not candidates:
-        matched_key = ename_key
-        search_str = search_str.lower()
-        candidates = [i for i in items if search_str in str.lower(i[ename_key])]
+    candidates, matched_key = find_candidates(
+        items, search_str, name_key, ename_key, english
+    )
 
     name = ename_key if english else name_key
+    query = search_str.lower()
 
     # 完全一致チェック
-    # 実際に部分一致したキーを、検索文字列と同じく小文字化して比較する
-    # (英語名検索では search_str が小文字化されているため)
+    # 実際に部分一致したキーで、英語名検索に合わせて大文字小文字を区別せずに比較する
     exact_matches = [
-        i
-        for i in candidates
-        if str.lower(i.get(matched_key, "")) == str.lower(search_str)
+        i for i in candidates if str.lower(i.get(matched_key, "")) == query
     ]
     if len(exact_matches) == 1:
         await on_found(ctx, exact_matches[0], callback_arg)
@@ -111,7 +169,7 @@ async def search[T](
     if not candidates:
         suggests = sorted(
             items,
-            key=lambda x: fuzz.partial_ratio(search_str, str.lower(x[name])),
+            key=lambda x: fuzz.partial_ratio(query, str.lower(x[name])),
             reverse=True,
         )[:10]
         view = SelectView(ctx, on_found, callback_arg)

@@ -217,7 +217,11 @@ class Test_SelectButton:
 class FakeInteraction:
     def __init__(self, user_id: int):
         self.user = FakeUser(user_id)
-        self.message = FakeInteractionMessage()
+        self.response = FakeInteractionResponse()
+        self.deleted = False
+
+    async def delete_original_response(self):
+        self.deleted = True
 
 
 class FakeUser:
@@ -225,12 +229,12 @@ class FakeUser:
         self.id = user_id
 
 
-class FakeInteractionMessage:
+class FakeInteractionResponse:
     def __init__(self):
-        self.deleted = False
+        self.deferred = False
 
-    async def delete(self):
-        self.deleted = True
+    async def defer(self):
+        self.deferred = True
 
 
 class Test_ボタンのコールバック:
@@ -242,7 +246,8 @@ class Test_ボタンのコールバック:
 
         await button.callback(as_interaction(interaction))
 
-        assert interaction.message.deleted is True
+        assert interaction.response.deferred is True
+        assert interaction.deleted is True
         assert result.found[0]["item"] == ITEMS[0]
         assert result.found[0]["arg"] == "ARG"
 
@@ -254,7 +259,7 @@ class Test_ボタンのコールバック:
 
         await button.callback(as_interaction(interaction))
 
-        assert interaction.message.deleted is False
+        assert interaction.deleted is False
         assert result.found == []
 
     async def test_ビューに属さないボタンは何もしない(self, ctx, result):
@@ -263,5 +268,56 @@ class Test_ボタンのコールバック:
 
         await button.callback(as_interaction(interaction))
 
-        assert interaction.message.deleted is False
+        assert interaction.deleted is False
         assert result.found == []
+
+
+def choice_pairs(choices) -> list[tuple[str, str]]:
+    return [(c.name, c.value) for c in choices]
+
+
+class Test_オートコンプリートの候補:
+    def test_入力が空なら候補を出さない(self):
+        assert ListSearch.autocomplete_choices(ITEMS, "", "name", "english_name") == []
+
+    def test_部分一致した名前を前方一致を先にして返す(self):
+        choices = ListSearch.autocomplete_choices(
+            ITEMS, "グリッド", "name", "english_name"
+        )
+
+        assert choice_pairs(choices) == [
+            ("グリッド・バグ", "グリッド・バグ"),
+            ("大グリッド・バグ", "大グリッド・バグ"),
+        ]
+
+    def test_日本語名で見つからなければ英語名で返す(self):
+        choices = ListSearch.autocomplete_choices(ITEMS, "RAT", "name", "english_name")
+
+        assert choice_pairs(choices) == [("Giant rat", "Giant rat")]
+
+    def test_英語名検索では英語名だけを探す(self):
+        items = [{"name": "Grid", "english_name": "グリッド"}] + ITEMS
+
+        choices = ListSearch.autocomplete_choices(
+            items, "grid", "name", "english_name", english=True
+        )
+
+        assert choice_pairs(choices) == [
+            ("Grid bug", "Grid bug"),
+            ("Giant grid bug", "Giant grid bug"),
+        ]
+
+    def test_候補は25件まで(self):
+        items = [{"name": f"モンスター{i}", "english_name": ""} for i in range(30)]
+
+        choices = ListSearch.autocomplete_choices(items, "モンスター", "name", "")
+
+        assert len(choices) == 25
+
+    def test_長い名前は表示名を省略し値を切り詰める(self):
+        items = [{"name": "あ" * 120, "english_name": ""}]
+
+        choices = ListSearch.autocomplete_choices(items, "あ", "name", "english_name")
+
+        assert choices[0].name == "あ" * 97 + "..."
+        assert choices[0].value == "あ" * 100

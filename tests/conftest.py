@@ -7,6 +7,7 @@ DBは全て pytest の tmp_path 配下に作成する。
 import os
 import sqlite3
 import sys
+from types import SimpleNamespace
 from typing import Any, cast
 
 import aiohttp
@@ -130,12 +131,13 @@ INSERT INTO mon_info VALUES(
 class FakeContext:
     """discord.ext.commands.Context の代わりに使うスタブ
 
-    reply() / send_help() の呼び出し内容を記録するだけで、通信は行わない。
+    reply() / send_help() / defer() の呼び出し内容を記録するだけで、通信は行わない。
     """
 
     def __init__(self, author_id: int = 1):
         self.replies: list[dict[str, Any]] = []
         self.help_calls: list[Any] = []
+        self.deferred = False
         self.command = object()
         self.message = FakeMessage(author_id)
 
@@ -151,6 +153,9 @@ class FakeContext:
 
     async def send_help(self, command=None):
         self.help_calls.append(command)
+
+    async def defer(self):
+        self.deferred = True
 
     @property
     def last_reply(self) -> dict[str, Any]:
@@ -255,3 +260,11 @@ def as_session(session: FakeClientSession) -> aiohttp.ClientSession:
 # FakeInteraction は test_list_search.py 側で定義されているためここでは Any で受ける
 def as_interaction(interaction: Any) -> discord.Interaction:
     return cast(discord.Interaction, interaction)
+
+
+def fake_interaction(**options: Any) -> discord.Interaction:
+    """スラッシュコマンドの入力中の値 (namespace) だけを持つ Interaction のスタブ
+
+    オートコンプリートのように namespace しか読まない処理に渡す。
+    """
+    return as_interaction(SimpleNamespace(namespace=SimpleNamespace(**options)))

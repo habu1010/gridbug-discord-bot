@@ -2,6 +2,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 
 import ListSearch
@@ -49,16 +50,45 @@ class MonsterSpoiler(commands.Cog):
             await ctx.send_help(ctx.command)
             return
 
+        await self.search_monster(ctx, parse_result.monster_name, parse_result.english)
+
+    @app_commands.command(name="mon", description="モンスターを検索する")
+    @app_commands.describe(
+        name="検索するモンスターの名称の一部", english="英語名で検索する"
+    )
+    async def mon_slash(
+        self, interaction: discord.Interaction, name: str, english: bool = False
+    ) -> None:
+        ctx = await commands.Context.from_interaction(interaction)
+        # 3秒以内に応答しないとインタラクションが失敗するため、先に応答を保留しておく
+        await ctx.defer()
+        await self.search_monster(ctx, name, english)
+
+    @mon_slash.autocomplete("name")
+    async def mon_name_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return ListSearch.autocomplete_choices(
+            self.mon_info_list,
+            current,
+            "name",
+            "english_name",
+            bool(interaction.namespace.english),
+        )
+
+    async def search_monster(
+        self, ctx: commands.Context, name: str, english: bool
+    ) -> None:
         await ListSearch.search(
             ctx,
             self.send_mon_info,
             self.send_error,
             None,
             self.mon_info_list,
-            parse_result.monster_name,
+            name,
             "name",
             "english_name",
-            parse_result.english,
+            english,
         )
 
     async def create_mon_info_embed(self, mon_info: ListSearch.Item) -> discord.Embed:
