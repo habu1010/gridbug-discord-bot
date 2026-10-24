@@ -4,8 +4,12 @@ MonsterSpoiler は __init__ で checker_task を起動するため、
 __new__ でインスタンスだけ作り必要な属性を差し込んで検証する。
 """
 
+from typing import Any, cast
+
 import discord
 import pytest
+from conftest import fake_interaction
+from discord.ext import commands
 
 import MonsterInfo
 from MonsterSpoiler import MonsterSpoiler
@@ -84,3 +88,39 @@ class Test_send_error:
         embed = ctx.last_reply["embed"]
         assert embed.title == "候補が多すぎます (11 件)"
         assert embed.color == discord.Color.red()
+
+
+class Test_スラッシュコマンド:
+    async def test_検索結果を返信する(self, cog, ctx, monkeypatch):
+        cog.mon_info_list = [MON_INFO]
+
+        async def from_interaction(interaction):
+            return ctx
+
+        monkeypatch.setattr(commands.Context, "from_interaction", from_interaction)
+
+        # callback の型は self を除いた引数で定義されているため、そのままでは
+        # cog を渡せない (実行時は self を最初の引数として受け取る)
+        callback = cast(Any, MonsterSpoiler.mon_slash.callback)
+        await callback(cog, fake_interaction(), "グリッド")
+
+        assert ctx.deferred is True
+        assert ctx.last_reply["embed"].title == "グリッド・バグ / Grid bug (紫の 'I')"
+
+    async def test_名前の候補を出す(self, cog):
+        cog.mon_info_list = [MON_INFO]
+
+        choices = await cog.mon_name_autocomplete(
+            fake_interaction(english=None), "グリッド"
+        )
+
+        assert [c.value for c in choices] == ["グリッド・バグ"]
+
+    async def test_英語名検索なら英語名の候補を出す(self, cog):
+        cog.mon_info_list = [MON_INFO]
+
+        choices = await cog.mon_name_autocomplete(
+            fake_interaction(english=True), "grid"
+        )
+
+        assert [c.value for c in choices] == ["Grid bug"]

@@ -110,10 +110,11 @@ SQLite書き込み系のReader (`ArtifactInfoReader` / `KindInfoReader` / `Activ
 - 接頭辞は `$ ! ? ＄ ！ ？` のいずれも受け付ける。
 - 引数解析は `ErrorCatchingArgumentParser` (argparseの `exit()` を例外に変える薄いラッパ)。パース失敗時は `ctx.send_help(ctx.command)` を呼ぶ。ヘルプ本文は **コマンド関数のdocstringがそのままDiscordに表示される** ため、docstringにpositional/optional argumentsを手書きしている。
 - 名前検索は [ListSearch.py](ListSearch.py) の `search()` に集約。部分一致 → 完全一致が1件ならそれを採用 → 候補10件以下ならボタン(`SelectView`/`SelectButton`)で選択 → 0件なら fuzzywuzzy であいまい候補を提示、という流れ。ボタンは発言者本人しか押せない。
+- `$mon` / `$art` はスラッシュコマンド (`/mon` / `/art`) としても使える。プレフィックス付きのコマンドとは別の `app_commands.command` として同じCogに定義し、`commands.Context.from_interaction()` で作った Context で同じ検索処理 (`search_monster()` / `search_artifact()`) を呼ぶ。名前の引数は `ListSearch.autocomplete_choices()` で入力補完する。スラッシュコマンドは `Bot.setup_hook()` が全拡張のロード後に `tree.sync()` で Discord に登録する。
 
 ### Discord APIの制限
 
-Embed title は256文字、ボタンラベルは80文字が上限。長い文字列は [utils.py](utils.py) の `limit_str_length()` で切り詰める。
+Embed title は256文字、ボタンラベルは80文字、オートコンプリートの候補は25件・名前と値は100文字が上限。長い文字列は [utils.py](utils.py) の `limit_str_length()` で切り詰める。
 
 ## デプロイ
 

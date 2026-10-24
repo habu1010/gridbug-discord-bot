@@ -3,11 +3,13 @@
 表示文字列を組み立てる describe_* 系と、
 DBからアーティファクト情報を組み立てる非同期メソッドを検証する。
 
-ArtifactSpoilerCog は __init__ で checker_task を起動するためテストでは生成しない。
+ArtifactSpoilerCog は __init__ で checker_task を起動するため、__new__ で生成して属性を差し込む。
 """
 
 import logging
 import sqlite3
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from conftest import (
@@ -15,10 +17,11 @@ from conftest import (
     FakeResponse,
     as_session,
     create_old_schema_flag_info,
+    fake_interaction,
     read_fixture,
 )
 
-from ArtifactSpoiler import ArtifactSpoiler
+from ArtifactSpoiler import ArtifactSpoiler, ArtifactSpoilerCog
 from FlagInfoReader import FlagInfoReader
 
 BASE_URL = "https://example.invalid/hengband/master"
@@ -462,3 +465,30 @@ class Test_check_for_updates:
         # 2度目は更新もロードも行わず、同じリストを保持したままになる
         await spoiler.check_for_updates(as_session(session))
         assert spoiler.artifacts is loaded
+
+
+class Test_スラッシュコマンドの名前の候補:
+    @pytest.fixture
+    def cog(self) -> ArtifactSpoilerCog:
+        cog = ArtifactSpoilerCog.__new__(ArtifactSpoilerCog)
+        # 候補の作成は artifacts しか読まないので、それだけを持つスタブで足りる
+        spoilers = {
+            "master": SimpleNamespace(
+                artifacts=[{"fullname": "『リンギル』", "fullname_en": "'Ringil'"}]
+            ),
+            "develop": SimpleNamespace(
+                artifacts=[{"fullname": "『リンギル改』", "fullname_en": "'Ringil'"}]
+            ),
+        }
+        cog.spoilers = cast(dict[str, ArtifactSpoiler], spoilers)
+        return cog
+
+    @pytest.mark.parametrize(
+        "develop, expected", [(None, "『リンギル』"), (True, "『リンギル改』")]
+    )
+    async def test_developの指定に応じたブランチから探す(self, cog, develop, expected):
+        interaction = fake_interaction(english=None, develop=develop)
+
+        choices = await cog.art_name_autocomplete(interaction, "リンギル")
+
+        assert [c.value for c in choices] == [expected]

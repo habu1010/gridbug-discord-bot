@@ -32,6 +32,15 @@ class Bot(commands.Bot):
             self.ext = ext
             await self.load_extension(extension_name)
 
+        # 各拡張が登録したスラッシュコマンドを Discord に登録する。
+        # 失敗してもプレフィックス付きのコマンドは使えるので、起動は続ける
+        try:
+            await self.tree.sync()
+        except (discord.HTTPException, discord.app_commands.AppCommandError) as e:
+            logging.getLogger(__name__).warning(
+                f"スラッシュコマンドを登録できませんでした: {e}"
+            )
+
 
 async def main() -> None:
     with open(os.path.expanduser("~/.bot-config.yml"), "r") as f:
