@@ -6,6 +6,10 @@ from typing import Any
 
 @dataclass
 class MonsterInfoReader:
+    # パース結果が変わる修正をしたら上げる。DB に保存するハッシュに混ぜることで、
+    # 本家のスポイラーが変わらなくても次の取得時に DB を作り直させる
+    VERSION = 2
+
     name_lines: list[str]
     detail_lines: list[str]
     info_line: str
@@ -52,7 +56,9 @@ class MonsterInfoReader:
             return None
         # 日本語名は省略されている場合がある
         name = m[2].replace("\n", "") if m[2] else ""
-        english_name = m[3].replace("\n", " ")
+        # (.+) が貪欲なため、シンボルの "(" の前の空白まで英語名に含まれてしまう。
+        # "/" の直後で折り返されている場合は、改行を置き換えた空白が先頭に付く
+        english_name = m[3].replace("\n", " ").strip()
         is_unique = True if m[1] else False
         symbol = m[4].replace("\n", "")
 

@@ -4,8 +4,6 @@ DBの読み書きと、スポイラー取得〜更新判定の流れを検証す
 HTTP通信は FakeClientSession に差し替えるため実際の通信は行わない。
 """
 
-import hashlib
-
 import aiosqlite
 import pytest
 from conftest import FakeClientSession, FakeResponse, read_fixture
@@ -157,14 +155,26 @@ class Test_check_update:
         mon_list = await m_info.get_monster_info_list()
         assert len(mon_list) == 5
 
-    async def test_取得内容のMD5が保存される(self, monkeypatch, m_info):
+    async def test_取得内容のハッシュが保存される(self, monkeypatch, m_info):
         body = read_fixture("mon-info.txt")
         patch_client_session(monkeypatch, FakeClientSession(FakeResponse(200, body)))
 
         await m_info.check_update(MON_INFO_URL)
 
-        expected = hashlib.md5(body.encode("utf-8")).hexdigest()
+        expected = MonsterInfo.MonsterInfo.calc_hash(body)
         assert await m_info.get_current_mon_info_hash() == expected
+
+    async def test_パーサのバージョンが変わればDBを作り直す(self, monkeypatch, m_info):
+        body = read_fixture("mon-info.txt")
+        patch_client_session(monkeypatch, FakeClientSession(FakeResponse(200, body)))
+        await m_info.check_update(MON_INFO_URL)
+
+        monkeypatch.setattr(
+            MonsterInfo.MonsterInfoReader.MonsterInfoReader, "VERSION", 999
+        )
+        patch_client_session(monkeypatch, FakeClientSession(FakeResponse(200, body)))
+
+        assert await m_info.check_update(MON_INFO_URL) is True
 
     async def test_初回リクエストではetagを送らない(self, monkeypatch, m_info):
         session = FakeClientSession(FakeResponse(304))

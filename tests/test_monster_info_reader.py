@@ -71,7 +71,7 @@ class Test_parse:
 
         assert result["id"] == "16"
         assert result["name"] == "グリッド・バグ"
-        assert result["english_name"].strip() == "Grid bug"
+        assert result["english_name"] == "Grid bug"
         assert result["is_unique"] is False
         assert result["symbol"] == "紫の 'I'"
         assert result["level"] == "1"
@@ -117,11 +117,21 @@ class Test_parse:
             "無敵の恐れ知らずの官能的なる不可思議なる魅惑の頑健なる勤勉なる圧倒的なる"
             "華麗なる灰色の王子『強靭なるゾート』"
         )
-        assert result["english_name"].strip() == (
+        assert result["english_name"] == (
             "TOUGH ZOTE, the INVINCIBLE FEARLESS GREY PRINCE"
         )
         assert result["symbol"] == "青灰色の 'I'"
         assert result["is_unique"] is True
+
+    def test_スラッシュの直後で折り返されても英語名の先頭に空白を残さない(self):
+        result = parse_one(
+            "グリッド・バグ/\n"
+            "Grid bug (紫の 'I')\n"
+            "=== Num:16  Lev:1  Rar:1  Spd:+0  Hp:2d3  Ac:12  Exp:1\n"
+            "詳細。\n"
+        )
+
+        assert result["english_name"] == "Grid bug"
 
     def test_日本語名がない名前行では日本語名が空になる(self):
         # 名前行の正規表現は "日本語名/英語名" の "/" を省略可能としている
@@ -132,7 +142,7 @@ class Test_parse:
         )
 
         assert result["name"] == ""
-        assert result["english_name"].strip() == "Grid bug"
+        assert result["english_name"] == "Grid bug"
         assert result["symbol"] == "紫の 'I'"
 
     def test_データが不完全な場合はNoneを返す(self):

@@ -96,6 +96,12 @@ CREATE TABLE mon_info(
 
         return row["hash"] if row is not None else ""
 
+    @staticmethod
+    def calc_hash(mon_info: str) -> str:
+        """取得したスポイラーとパーサのバージョンから、更新判定に使うハッシュ値を計算する"""
+        version = MonsterInfoReader.MonsterInfoReader.VERSION
+        return hashlib.md5(f"{version}\n{mon_info}".encode("utf-8")).hexdigest()
+
     async def check_update(self, mon_info_txt_url: str) -> bool:
         """URLからモンスター詳細スポイラーを取得して、必要ならばDBを更新する
 
@@ -121,7 +127,7 @@ CREATE TABLE mon_info(
 
         # mon-info.txtのMD5キャッシュを計算し、
         # 保持している内容と同じであれば更新は行わない
-        md5_hash = hashlib.md5(mon_info.encode("utf-8")).hexdigest()
+        md5_hash = self.calc_hash(mon_info)
         latest_hash = await self.get_current_mon_info_hash()
         if md5_hash == latest_hash:
             return False
