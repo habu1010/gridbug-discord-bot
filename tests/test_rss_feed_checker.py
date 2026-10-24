@@ -278,6 +278,66 @@ class Test_build_embed:
         assert embed.description is None
 
 
+def build_hengscore_embed(title: str) -> discord.Embed:
+    checker = make_checker(HengscoreRssChecker, name="Hengscore")
+    items = [(title, "https://example.invalid/scores/1/dump", "Mon, 01 Jan 2024")]
+    feed = feedparser.parse(build_rss(items))
+    return checker.build_embed(feed.entries[0])
+
+
+def fields(embed: discord.Embed) -> list[tuple[str | None, str | None]]:
+    return [(f.name, f.value) for f in embed.fields]
+
+
+class Test_hengscoreのスコア表示:
+    def test_勝利したキャラクターはトロフィーを付けて金色で表示する(self):
+        embed = build_hengscore_embed(
+            "しあわせもののPERFECT VANITY Score:39640485 マーフォーク 剣術家"
+            " 勝利の後引退した"
+        )
+
+        assert embed.title == "🏆 しあわせもののPERFECT VANITY"
+        assert fields(embed) == [
+            ("スコア", "39,640,485"),
+            ("種族", "マーフォーク"),
+            ("職業", "剣術家"),
+            ("結果", "勝利の後引退した"),
+        ]
+        assert embed.color == discord.Color.gold()
+
+    def test_死亡したキャラクターは赤で表示する(self):
+        # 死因には空白が含まれることがある
+        embed = build_hengscore_embed(
+            "しあわせもののPERFECT VANITY Score:6359244 イーク 魔道具術師"
+            " 鉄獄の76階で『死神ももえ』 に殺された"
+        )
+
+        assert embed.title == "しあわせもののPERFECT VANITY"
+        assert fields(embed)[3] == ("結果", "鉄獄の76階で『死神ももえ』 に殺された")
+        assert embed.color == discord.Color.red()
+
+    def test_名前と結果のマークダウンの記号はエスケープする(self):
+        embed = build_hengscore_embed(
+            "ふつうの__x__ Score:0 人間 戦士 鉄獄の1階で*ゴブリン*に殺された"
+        )
+
+        assert embed.title == "ふつうの\\_\\_x\\_\\_"
+        assert fields(embed)[3] == ("結果", "鉄獄の1階で\\*ゴブリン\\*に殺された")
+
+    def test_勝利でも死亡でもなければ色を付けない(self):
+        embed = build_hengscore_embed("ふつうのあ Score:0 人間 戦士 引退した")
+
+        assert fields(embed)[3] == ("結果", "引退した")
+        assert embed.color is None
+
+    def test_形式の違うタイトルはそのまま表示する(self):
+        embed = build_hengscore_embed("お知らせ")
+
+        assert embed.title == "お知らせ"
+        assert embed.fields == []
+        assert embed.color is None
+
+
 class FakeChannel:
     """送信した Embed を記録するチャンネルのスタブ
 
