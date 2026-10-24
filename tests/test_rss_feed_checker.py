@@ -118,6 +118,39 @@ class Test_get_new_items:
 
         assert [i.title for i in new_items] == ["記事4"]
 
+    @pytest.mark.parametrize(
+        "res_url, expected",
+        [
+            # リダイレクトされなければフィードのURLが基準
+            (None, "https://example.invalid/scores/1/dump"),
+            # リダイレクトされたら移転先のURLが基準
+            ("https://moved.invalid/feed.rss", "https://moved.invalid/scores/1/dump"),
+        ],
+    )
+    async def test_相対URLのリンクを絶対URLにする(self, res_url, expected):
+        checker = make_checker()
+        items = [("記事1", "/scores/1/dump", "Mon, 01 Jan 2024 00:00:00 GMT")]
+        res = FakeResponse(200, build_rss(items), url=res_url)
+        session = FakeClientSession(res)
+
+        new_items = await checker.get_new_items(as_session(session), 5)
+
+        assert new_items[0]["link"] == expected
+
+    # 空のリンクは、フィード自体のURLに解決されないことも確かめる
+    @pytest.mark.parametrize("link_elem", ["", "<link></link>"])
+    async def test_リンクの無い記事はリンクなしで通知する(self, link_elem):
+        checker = make_checker()
+        rss = build_rss(ITEMS).replace(
+            "<link>https://example.invalid/1</link>", link_elem
+        )
+        session = FakeClientSession(FakeResponse(200, rss))
+
+        new_items = await checker.get_new_items(as_session(session), 5)
+
+        assert [i.title for i in new_items] == ["記事3", "記事2", "記事1"]
+        assert checker.build_embed(new_items[2]).url is None
+
     async def test_更新がなければ空になる(self):
         checker = make_checker()
         session = FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
@@ -209,7 +242,20 @@ class Test_build_embed:
         assert embed.url == "https://example.invalid/1"
         assert embed.author.name == "変愚蛮怒Wiki"
 
-    def test_hengscoreはスクリーンへのリンクを付ける(self):
+    async def test_hengscoreはスクリーンへのリンクを付ける(self):
+        checker = make_checker(HengscoreRssChecker, name="Hengscore")
+        items = [("ダンプ", "/scores/1/dump", "Mon, 01 Jan 2024 00:00:00 GMT")]
+        session = FakeClientSession(FakeResponse(200, build_rss(items)))
+        new_items = await checker.get_new_items(as_session(session), 5)
+
+        embed = checker.build_embed(new_items[0])
+
+        assert embed.url == "https://example.invalid/scores/1/dump"
+        assert embed.description == (
+            ":camera:[screen](https://example.invalid/scores/1/screen)"
+        )
+
+    def test_hengscoreはダンプでないリンクにスクリーンのリンクを付けない(self):
         checker = make_checker(HengscoreRssChecker, name="Hengscore")
         items = [
             (
@@ -222,7 +268,4 @@ class Test_build_embed:
 
         embed = checker.build_embed(feed.entries[0])
 
-        assert embed.description == (
-            ":camera:[screen](https://example.invalid/show_screen.php?id=1)"
-        )
-        assert embed.url == "https://example.invalid/show_dump.php?id=1"
+        assert embed.description is None

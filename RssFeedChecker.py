@@ -6,6 +6,7 @@ import time
 from logging import getLogger
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urljoin
 
 import aiohttp
 import discord
@@ -46,6 +47,8 @@ class RssChecker:
             if res.status != 200:
                 return []
             body = await res.text()
+            # リダイレクトされた場合は移転先のURLになる
+            base_url = str(res.url)
 
         try:
             feed = feedparser.parse(body)
@@ -58,6 +61,12 @@ class RssChecker:
             # Feedパースエラー
             getLogger(__name__).warning(feed.bozo_exception)
             return []
+
+        # リンクが相対URLのフィード (新しいHengscoreなど) もあるため、
+        # フィードのURLを基準に絶対URLにする (Embed の url は http/https しか受け付けない)
+        for i in feed.entries:
+            if i.get("link"):
+                i["link"] = urljoin(base_url, cast(str, i["link"]))
 
         self.add_last_updated_time(feed)
         # FeedParserDict は dict のサブクラスで属性アクセスは型情報を持たないため、
@@ -79,7 +88,8 @@ class RssChecker:
             i["last_updated_time"] = datetime.datetime(*updated[:6]).timestamp()
 
     def build_embed(self, item: FeedParserDict) -> discord.Embed:
-        embed = discord.Embed(title=item["title"], url=item["link"])
+        # link の無い (または空の) 記事は、リンクなしで通知する
+        embed = discord.Embed(title=item["title"], url=item.get("link") or None)
         embed.set_author(name=self.name)
         return embed
 
@@ -96,9 +106,12 @@ class PukiwikiRssChecker(RssChecker):
 class HengscoreRssChecker(RssChecker):
     def build_embed(self, item: FeedParserDict) -> discord.Embed:
         embed = super().build_embed(item)
-        link = cast(str, item["link"])
-        screen_url = link.replace("show_dump.php?", "show_screen.php?")
-        embed.description = f":camera:[screen]({screen_url})"
+        link = cast(str, item.get("link", ""))
+        # ダンプ (/scores/<id>/dump) と同じ階層にスクリーン (/scores/<id>/screen) がある。
+        # 想定と違う形のリンクでは、存在しないページを指さないようスクリーンのリンクを付けない
+        if link.endswith("/dump"):
+            screen_url = link.removesuffix("/dump") + "/screen"
+            embed.description = f":camera:[screen]({screen_url})"
         return embed
 
 

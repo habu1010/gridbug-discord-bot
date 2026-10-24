@@ -173,14 +173,24 @@ def ctx() -> FakeContext:
 
 
 class FakeResponse:
-    """aiohttp のレスポンスを模したスタブ"""
+    """aiohttp のレスポンスを模したスタブ
+
+    url はリダイレクト先のURL。省略すると FakeClientSession.get() が
+    リクエストごとにそのURLを入れる (リダイレクトされなかった場合の aiohttp の挙動と同じ)。
+    """
 
     def __init__(
-        self, status: int = 200, body: str = "", headers: dict[str, str] | None = None
+        self,
+        status: int = 200,
+        body: str = "",
+        headers: dict[str, str] | None = None,
+        url: str | None = None,
     ):
         self.status = status
         self.body = body
         self.headers = headers if headers is not None else {}
+        self.redirected_url = url
+        self.url = url
 
     async def text(self) -> str:
         return self.body
@@ -218,9 +228,10 @@ class FakeClientSession:
         for key, res in self.responses.items():
             if key in url:
                 if isinstance(res, list):
-                    return res.pop(0) if res else FakeResponse(status=404)
+                    res = res.pop(0) if res else FakeResponse(status=404)
+                res.url = res.redirected_url or url
                 return res
-        return FakeResponse(status=404)
+        return FakeResponse(status=404, url=url)
 
     async def __aenter__(self):
         return self
