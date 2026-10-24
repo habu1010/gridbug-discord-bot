@@ -8,7 +8,11 @@ from discord.ext import commands, tasks
 import ListSearch
 import MonsterInfo
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
-from utils import limit_str_length
+from utils import (
+    MAX_EMBED_DESCRIPTION_LENGTH,
+    MAX_EMBED_TITLE_LENGTH,
+    limit_str_length,
+)
 
 if TYPE_CHECKING:
     from bot import Bot
@@ -94,13 +98,14 @@ class MonsterSpoiler(commands.Cog):
     async def create_mon_info_embed(self, mon_info: ListSearch.Item) -> discord.Embed:
         header = "[U] " if mon_info["is_unique"] else ""
         title = header + "{name} / {english_name} ({symbol})".format(**mon_info)
-        # Discord Embed titleは256文字まで
-        title = limit_str_length(title, 256)
+        title = limit_str_length(title, MAX_EMBED_TITLE_LENGTH)
         description = """
 ID:{id}  階層:{level}  レア度:{rarity}  加速:{speed}  HP:{hp}  AC:{ac}  Exp:{exp}
 
 """.format(**mon_info)
         description += await self.m_info.get_monster_detail(mon_info["id"])
+        # 現状の最長は2000文字弱だが、本家のスポイラーしだいで上限を超えうる
+        description = limit_str_length(description, MAX_EMBED_DESCRIPTION_LENGTH)
         return discord.Embed(title=title, description=description)
 
     async def send_error(self, ctx: commands.Context, error_msg: str) -> None:

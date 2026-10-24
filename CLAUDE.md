@@ -114,7 +114,7 @@ SQLite書き込み系のReader (`ArtifactInfoReader` / `KindInfoReader` / `Activ
 
 ### Discord APIの制限
 
-Embed title は256文字、ボタンラベルは80文字、オートコンプリートの候補は25件・名前と値は100文字が上限。長い文字列は [utils.py](utils.py) の `limit_str_length()` で切り詰める。
+メッセージは2000文字、Embed title は256文字・description は4096文字・フィールドの値は1024文字、ボタンラベルは80文字、オートコンプリートの候補は25件・名前と値は100文字が上限。長い文字列は [utils.py](utils.py) の `limit_str_length()` で切り詰める。メッセージと Embed の上限は utils.py の定数 (`MAX_MESSAGE_LENGTH` / `MAX_EMBED_TITLE_LENGTH` / `MAX_EMBED_DESCRIPTION_LENGTH` / `MAX_EMBED_FIELD_VALUE_LENGTH`) を使い、数値を直書きしない (ボタンラベルとオートコンプリートの上限は、それだけを使う ListSearch.py の定数)。マークダウンをエスケープする文字列は、エスケープで最大2倍になることを見込んで先に切り詰める。
 
 ## デプロイ
 

@@ -61,6 +61,19 @@ class Test_roll:
         assert embed.title == str(sum(expected))
         assert embed.description == "[" + ",".join(str(i) for i in expected) + "]"
 
+    def test_最大の面数で最大の回数を振ってもEmbedの上限に収まる(self, cog):
+        embed = roll(cog, DiceRoll.MAX_DICE, DiceRoll.MAX_SIDE)
+
+        # Discord の Embed は title が256文字、description が4096文字まで
+        assert embed.title is not None and len(embed.title) <= 256
+        assert embed.description is not None and len(embed.description) <= 4096
+
+    def test_面の数が多すぎるとエラーになる(self, cog):
+        embed = roll(cog, 1, DiceRoll.MAX_SIDE + 1)
+
+        assert embed.title == "面の数が多すぎます"
+        assert embed.color == discord.Color.red()
+
     def test_出目は1から面数の範囲に収まる(self, cog):
         embed = roll(cog, 100, 6)
 

@@ -15,6 +15,11 @@ import FlagInfoReader
 import KindInfoReader
 import ListSearch
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
+from utils import (
+    MAX_EMBED_DESCRIPTION_LENGTH,
+    MAX_EMBED_TITLE_LENGTH,
+    limit_str_length,
+)
 
 if TYPE_CHECKING:
     from bot import Bot
@@ -372,10 +377,16 @@ class ArtifactSpoilerCog(commands.Cog):
     async def send_artifact_info(
         self, ctx: commands.Context, art: ListSearch.Item, spoiler: ArtifactSpoiler
     ) -> None:
-        art_desc = await spoiler.describe_artifact(art)
+        title, description = await spoiler.describe_artifact(art)
+        # エスケープで最大2倍の長さになるので、上限の半分で切り詰めてからエスケープする
+        # (現状の最長は title 124文字、description 272文字)
         embed = discord.Embed(
-            title=discord.utils.escape_markdown(art_desc[0]),
-            description=discord.utils.escape_markdown(art_desc[1]),
+            title=discord.utils.escape_markdown(
+                limit_str_length(title, MAX_EMBED_TITLE_LENGTH // 2)
+            ),
+            description=discord.utils.escape_markdown(
+                limit_str_length(description, MAX_EMBED_DESCRIPTION_LENGTH // 2)
+            ),
         )
         await ctx.reply(embed=embed)
 

@@ -16,7 +16,11 @@ import feedparser
 from discord.ext import commands, tasks
 from feedparser.util import FeedParserDict
 
-from utils import limit_str_length
+from utils import (
+    MAX_EMBED_FIELD_VALUE_LENGTH,
+    MAX_EMBED_TITLE_LENGTH,
+    limit_str_length,
+)
 
 if TYPE_CHECKING:
     from bot import Bot
@@ -157,7 +161,10 @@ class RssChecker:
 
     def build_embed(self, item: FeedParserDict) -> discord.Embed:
         # link の無い (または空の) 記事は、リンクなしで通知する
-        embed = discord.Embed(title=item["title"], url=item.get("link") or None)
+        embed = discord.Embed(
+            title=limit_str_length(cast(str, item["title"]), MAX_EMBED_TITLE_LENGTH),
+            url=item.get("link") or None,
+        )
         embed.set_author(name=self.name)
         return embed
 
@@ -179,9 +186,9 @@ class HengscoreRssChecker(RssChecker):
     # 記事の本文の先頭の見出し。勝利したキャラクターでは、この後に勝利メッセージが続く
     # (死亡したキャラクターの本文は死ぬ直前のメッセージで、長いので表示しない)
     VICTORY_MESSAGE_HEADER = "[*勝利*メッセージ]"
-    # 勝利メッセージの表示の上限。Embed のフィールドの値の上限は1024文字だが、
-    # マークダウンのエスケープで最大2倍の長さになるため、その半分で切り詰めてからエスケープする
-    MAX_VICTORY_MESSAGE_LENGTH = 1024 // 2
+    # 勝利メッセージの表示の上限。マークダウンのエスケープで最大2倍の長さになるため、
+    # Embed のフィールドの値の上限の半分で切り詰めてからエスケープする
+    MAX_VICTORY_MESSAGE_LENGTH = MAX_EMBED_FIELD_VALUE_LENGTH // 2
 
     def build_embed(self, item: FeedParserDict) -> discord.Embed:
         embed = super().build_embed(item)

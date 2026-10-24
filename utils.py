@@ -1,5 +1,11 @@
 # 共通ユーティリティ関数
 
+# Discord の文字数の上限
+MAX_MESSAGE_LENGTH = 2000
+MAX_EMBED_TITLE_LENGTH = 256
+MAX_EMBED_DESCRIPTION_LENGTH = 4096
+MAX_EMBED_FIELD_VALUE_LENGTH = 1024
+
 
 def limit_str_length(text: str, max_length: int) -> str:
     """

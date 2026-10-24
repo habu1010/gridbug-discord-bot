@@ -66,6 +66,18 @@ class Test_create_mon_info_embed:
         assert len(embed.title) == 256
         assert embed.title.endswith("...")
 
+    async def test_説明は4096文字に制限される(self, cog, monkeypatch):
+        # Discord の Embed description は4096文字が上限
+        async def long_detail(mon_id):
+            return "あ" * 5000
+
+        monkeypatch.setattr(cog.m_info, "get_monster_detail", long_detail)
+
+        embed = await cog.create_mon_info_embed(MON_INFO)
+
+        assert len(embed.description) == 4096
+        assert embed.description.endswith("...")
+
     async def test_詳細が無いモンスターでも生成できる(self, cog):
         embed = await cog.create_mon_info_embed(dict(MON_INFO, id=999999))
 

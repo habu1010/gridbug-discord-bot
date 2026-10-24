@@ -8,14 +8,16 @@ from typing import TYPE_CHECKING, Any
 import discord
 from discord.ext import commands, tasks
 
+from utils import MAX_MESSAGE_LENGTH
+
 if TYPE_CHECKING:
     from bot import Bot
 
 
 class ChannelLogger(commands.Cog):
-    # ログの長さの上限。Discord のメッセージの上限は2000文字だが、囲みのコードブロックの
-    # ``` の分と、絵文字などの数え方の違いに備えて余裕を持たせる
-    MAX_LOG_LENGTH = 1900
+    # ログを送るコードブロックと、Discord のメッセージの上限からその囲みの分を引いた長さ
+    CODE_BLOCK = "```{}```"
+    MAX_LOG_LENGTH = MAX_MESSAGE_LENGTH - len(CODE_BLOCK.format(""))
 
     def __init__(self, bot: commands.Bot, bot_config: dict[str, Any]):
         self._bot = bot
@@ -39,7 +41,7 @@ class ChannelLogger(commands.Cog):
         if not isinstance(channel, discord.abc.Messageable):
             return
 
-        await channel.send(f"```{self.shorten(log)}```")
+        await channel.send(self.CODE_BLOCK.format(self.shorten(log)))
 
     @classmethod
     def shorten(cls, log: str) -> str:

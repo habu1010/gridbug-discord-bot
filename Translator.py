@@ -6,6 +6,7 @@ from discord.ext import commands
 from googletrans.models import Detected, Translated
 
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
+from utils import MAX_MESSAGE_LENGTH, limit_str_length
 
 
 class Translator(commands.Cog):
@@ -60,10 +61,11 @@ class Translator(commands.Cog):
                 ),
             )
             msg = f"[{translated.src} → {translated.dest}] {translated.text}"
-            await ctx.reply(msg)
+            # 翻訳で長くなるとメッセージの上限を超えるので切り詰める
+            await ctx.reply(limit_str_length(msg, MAX_MESSAGE_LENGTH))
         except Exception as e:
-            error_msg = str(e)
-            await ctx.reply(error_msg)
+            # メッセージの無い例外では空のメッセージを送れないので repr にする
+            await ctx.reply(limit_str_length(str(e) or repr(e), MAX_MESSAGE_LENGTH))
 
 
 async def setup(bot: commands.Bot) -> None:
