@@ -280,6 +280,16 @@ class Test_build_embed:
         assert embed.url == "https://example.invalid/1"
         assert embed.author.name == "変愚蛮怒Wiki"
 
+    def test_長いタイトルは256文字に切り詰める(self):
+        checker = make_checker()
+        items = [("あ" * 300, "https://example.invalid/1", ITEMS[0][2])]
+        feed = feedparser.parse(build_rss(items))
+
+        embed = checker.build_embed(feed.entries[0])
+
+        # Discord の Embed title は256文字が上限
+        assert embed.title == "あ" * 253 + "..."
+
     async def test_hengscoreはスクリーンへのリンクを付ける(self):
         checker = make_checker(HengscoreRssChecker, name="Hengscore")
         items = [("ダンプ", "/scores/1/dump", "Mon, 01 Jan 2024 00:00:00 GMT")]

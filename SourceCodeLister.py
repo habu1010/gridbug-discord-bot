@@ -6,12 +6,17 @@ import discord
 from discord.ext import commands
 
 from ErrorCatchingArgumentParser import ErrorCatchingArgumentParser
+from utils import MAX_MESSAGE_LENGTH, limit_str_length
 
 if TYPE_CHECKING:
     from bot import Bot
 
 
 class SourceCodeLister(commands.Cog):
+    # 表示に使うコードブロックと、Discord のメッセージの上限からその囲みの分を引いた長さ
+    CODE_BLOCK = "```c\n{}\n```"
+    MAX_CODE_LENGTH = MAX_MESSAGE_LENGTH - len(CODE_BLOCK.format(""))
+
     def __init__(self, config: dict[str, Any]):
         self.src_url = config["src_url"]
 
@@ -60,8 +65,20 @@ class SourceCodeLister(commands.Cog):
             await self.send_error(ctx, "指定した行はありません")
             return
 
-        msg = "```c\n" + "\n".join(display_lines) + "\n```"
-        await ctx.reply(msg)
+        await ctx.reply(self.CODE_BLOCK.format(self.join_lines(display_lines)))
+
+    def join_lines(self, lines: list[str]) -> str:
+        """メッセージの上限に収まるところまで、行を改行でつなぐ
+
+        長い行が多いと30行でもメッセージの上限を超えるので、収まらない行は末尾から
+        行ごと落とす (表示した最後の行番号で、どこまで表示したか分かる)。
+        1行目だけで上限を超える場合は、その行を切り詰める。
+        """
+        code = "\n".join(lines)
+        while len(code) > self.MAX_CODE_LENGTH and len(lines) > 1:
+            lines = lines[:-1]
+            code = "\n".join(lines)
+        return limit_str_length(code, self.MAX_CODE_LENGTH)
 
     def parse_display_lines(self, display_lines: str) -> tuple[int, int] | None:
         m = re.fullmatch(r"(\d*)(-?)(\d*)", display_lines)

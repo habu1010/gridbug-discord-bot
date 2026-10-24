@@ -63,6 +63,32 @@ class Test_srclistコマンド:
         assert "   5  line5" in content
         assert "line6" not in content
 
+    async def test_長い行が多くてもメッセージの上限に収める(
+        self, monkeypatch, cog, ctx
+    ):
+        src = "\n".join("x" * 200 for _ in range(50))
+        self.patch_session(monkeypatch, FakeClientSession(FakeResponse(200, src)))
+
+        await Cog.srclist.callback(cog, ctx, "src/main.cpp", "1-30")
+
+        # Discord のメッセージは2000文字が上限。収まらない行は末尾から行ごと落とす
+        content = ctx.last_reply["content"]
+        assert len(content) <= 2000
+        assert content.startswith("```c\n")
+        assert content.endswith("x\n```")
+        assert "   9  " in content
+        assert "  10  " not in content
+
+    async def test_1行だけで上限を超える行は切り詰める(self, monkeypatch, cog, ctx):
+        src = "x" * 3000
+        self.patch_session(monkeypatch, FakeClientSession(FakeResponse(200, src)))
+
+        await Cog.srclist.callback(cog, ctx, "src/main.cpp", "1")
+
+        content = ctx.last_reply["content"]
+        assert len(content) <= 2000
+        assert content.endswith("...\n```")
+
     async def test_取得先URLはsrc_urlとパスの連結(self, monkeypatch, cog, ctx):
         session = FakeClientSession(FakeResponse(200, SRC))
         self.patch_session(monkeypatch, session)
