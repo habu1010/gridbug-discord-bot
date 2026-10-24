@@ -152,7 +152,15 @@ class RssCheckCog(commands.Cog):
 
         for (checker, channel), new_items in zip(self.targets, new_items_list):
             for item in new_items:
-                await channel.send(embed=checker.build_embed(item))
+                # 1件の失敗でタスクごと止まって全フィードの通知が途絶えないよう、
+                # 記事ごとに例外を捕まえてログに残し、次の記事へ進む
+                try:
+                    await channel.send(embed=checker.build_embed(item))
+                except Exception:
+                    getLogger(__name__).exception(
+                        f"{checker.name}: 記事を送信できませんでした"
+                        f" ({item.get('title')})"
+                    )
 
     @checker_task.before_loop
     async def before_checker_task(self) -> None:

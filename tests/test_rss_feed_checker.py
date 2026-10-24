@@ -1,19 +1,26 @@
 """RssFeedChecker のテスト
 
 RECORD_DIR を tmp_path に差し替えるため、ホームディレクトリには書き込まない。
-RssCheckCog は __init__ で checker_task を起動するためテストでは生成しない。
+RssCheckCog は __init__ で checker_task を起動するため、__new__ で生成して属性を差し込む。
 """
 
 import datetime
 import json
 import logging
 import os
+from typing import cast
 
+import discord
 import feedparser
 import pytest
 from conftest import FakeClientSession, FakeResponse, as_session
 
-from RssFeedChecker import HengscoreRssChecker, PukiwikiRssChecker, RssChecker
+from RssFeedChecker import (
+    HengscoreRssChecker,
+    PukiwikiRssChecker,
+    RssCheckCog,
+    RssChecker,
+)
 
 FEED_URL = "https://example.invalid/feed.rss"
 CHANNEL_ID = 12345
@@ -269,3 +276,36 @@ class Test_build_embed:
         embed = checker.build_embed(feed.entries[0])
 
         assert embed.description is None
+
+
+class FakeChannel:
+    """送信した Embed を記録するチャンネルのスタブ
+
+    fail_titles に含まれるタイトルの Embed は送信に失敗させる。
+    """
+
+    def __init__(self, fail_titles: tuple[str, ...] = ()):
+        self.fail_titles = fail_titles
+        self.sent: list[str | None] = []
+
+    async def send(self, embed):
+        if embed.title in self.fail_titles:
+            raise RuntimeError("送信失敗")
+        self.sent.append(embed.title)
+
+
+class Test_checker_task:
+    async def test_送信に失敗した記事があっても残りの記事を送る(self, caplog):
+        checker = make_checker(name="失敗あり")
+        channel = FakeChannel(fail_titles=("記事2",))
+        cog = RssCheckCog.__new__(RssCheckCog)
+        cog.client_session = as_session(
+            FakeClientSession(FakeResponse(200, build_rss(ITEMS)))
+        )
+        cog.targets = [(checker, cast(discord.abc.Messageable, channel))]
+
+        with caplog.at_level(logging.ERROR):
+            await RssCheckCog.checker_task.coro(cog)
+
+        assert channel.sent == ["記事3", "記事1"]
+        assert "失敗あり: 記事を送信できませんでした (記事2)" in caplog.text
