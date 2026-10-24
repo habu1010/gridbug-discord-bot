@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from typing import cast
+from xml.sax.saxutils import escape
 
 import discord
 import feedparser
@@ -278,10 +279,20 @@ class Test_build_embed:
         assert embed.description is None
 
 
-def build_hengscore_embed(title: str) -> discord.Embed:
+def build_hengscore_embed(title: str, content: str = "") -> discord.Embed:
+    """Hengscore と同じ形の Atom フィードの記事1件から Embed を作る"""
     checker = make_checker(HengscoreRssChecker, name="Hengscore")
-    items = [(title, "https://example.invalid/scores/1/dump", "Mon, 01 Jan 2024")]
-    feed = feedparser.parse(build_rss(items))
+    atom = f"""<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>{escape(title)}</title>
+    <updated>2024-01-01T00:00:00+09:00</updated>
+    <link href="https://example.invalid/scores/1/dump"/>
+    <content type="text">{escape(content)}</content>
+  </entry>
+</feed>
+"""
+    feed = feedparser.parse(atom)
     return checker.build_embed(feed.entries[0])
 
 
@@ -336,6 +347,57 @@ class Test_hengscoreのスコア表示:
         assert embed.title == "お知らせ"
         assert embed.fields == []
         assert embed.color is None
+
+
+class Test_hengscoreの勝利メッセージ:
+    VICTORY_TITLE = "コンバットpriest Score:13843047 半巨人 プリースト 勝利の後引退した"
+
+    def test_勝利メッセージを表示する(self):
+        # 実際のフィードと同じく、本文は空白で始まる
+        embed = build_hengscore_embed(
+            self.VICTORY_TITLE,
+            "  [*勝利*メッセージ]\n\n  「トラブルで セプクをします ニンジャのせい」",
+        )
+
+        assert fields(embed)[-1] == (
+            "勝利メッセージ",
+            "「トラブルで セプクをします ニンジャのせい」",
+        )
+
+    def test_複数行の勝利メッセージは行頭の空白だけを取り除く(self):
+        embed = build_hengscore_embed(
+            self.VICTORY_TITLE, "[*勝利*メッセージ]\n\n  1行目\n    2行目\n"
+        )
+
+        assert fields(embed)[-1] == ("勝利メッセージ", "1行目\n  2行目")
+
+    def test_マークダウンの記号はエスケープする(self):
+        embed = build_hengscore_embed(
+            self.VICTORY_TITLE, "[*勝利*メッセージ]\n\n  **強い**"
+        )
+
+        assert fields(embed)[-1] == ("勝利メッセージ", "\\*\\*強い\\*\\*")
+
+    def test_長い勝利メッセージはエスケープしても1024文字に収まるよう切り詰める(self):
+        embed = build_hengscore_embed(
+            self.VICTORY_TITLE, "[*勝利*メッセージ]\n\n  " + "*" * 2000
+        )
+
+        assert fields(embed)[-1][1] == "\\*" * 509 + "..."
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            # 勝利メッセージを書かずに引退した
+            "",
+            # 死亡したキャラクターの本文は表示しない
+            "[死ぬ直前のメッセージ]\n\n> グレムリンに殺された。",
+        ],
+    )
+    def test_勝利メッセージでなければ表示しない(self, content):
+        embed = build_hengscore_embed(self.VICTORY_TITLE, content)
+
+        assert "勝利メッセージ" not in [name for name, _ in fields(embed)]
 
 
 class FakeChannel:
