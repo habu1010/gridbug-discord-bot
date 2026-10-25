@@ -79,7 +79,7 @@ extensions:
 
 ### 拡張のロードと設定の受け渡し
 
-[bot.py](bot.py) は `extensions` の各エントリについて **`self.ext = ext` を代入した直後に `load_extension()` を呼ぶ**。各モジュールの `setup(bot)` は `bot.ext` を読んで自分の設定辞書を取得する ([MonsterSpoiler.py:92-93](MonsterSpoiler.py#L92-L93) など)。つまり `bot.ext` は「今ロード中の拡張の設定」を指す一時的な受け渡し用の属性であり、`setup()` の中でしか有効でない。新しいCogを追加する際もこの流儀に従うこと。読み込めない拡張 (設定に残った削除済みの拡張名、`setup()` での例外、設定の書き間違いなど) は、エラーログに残して残りの拡張の読み込みを続ける。
+[bot.py](bot.py) は `extensions` の各エントリについて **`self.ext = ext` を代入した直後に `load_extension()` を呼ぶ**。各モジュールの `setup(bot)` は `bot.ext` を読んで自分の設定辞書を取得する ([MonsterSpoiler.py:127-128](MonsterSpoiler.py#L127-L128) など)。つまり `bot.ext` は「今ロード中の拡張の設定」を指す一時的な受け渡し用の属性であり、`setup()` の中でしか有効でない。新しいCogを追加する際もこの流儀に従うこと。読み込めない拡張 (設定に残った削除済みの拡張名、`setup()` での例外、設定の書き間違いなど) は、エラーログに残して残りの拡張の読み込みを続ける。
 
 ### 情報取得のパイプライン
 
@@ -92,7 +92,7 @@ extensions:
 - モンスター: [MonsterInfo.py](MonsterInfo.py) が MD5ハッシュ比較 + ETag の二段構えで更新判定し、`mon-info.db` を更新。パースは [MonsterInfoReader.py](MonsterInfoReader.py) (空行区切り・`===` 行始まりのプレーンテキストスポイラー形式)。
 - アーティファクト: [ArtifactSpoiler.py](ArtifactSpoiler.py) が `master` / `develop` の2ブランチ分の `ArtifactSpoiler` インスタンス (`art-info-master.db` / `art-info-develop.db`) を持ち、`$art -d` で develop を検索する。取得元は本家の `ArtifactDefinitions.jsonc` / `BaseitemDefinitions.jsonc` / `activation-info-table.cpp` / `spoiler-table.cpp` の4ファイル。
 
-SQLite書き込み系のReader (`ArtifactInfoReader` / `KindInfoReader` / `ActivationInfoReader` / `FlagInfoReader`) は同期 `sqlite3` を使うため、イベントループを塞がないよう `loop.run_in_executor()` 経由で呼ぶ ([ArtifactSpoiler.py:245-248](ArtifactSpoiler.py#L245-L248))。読み出し側は `aiosqlite` を使う。
+SQLite書き込み系のReader (`ArtifactInfoReader` / `KindInfoReader` / `ActivationInfoReader` / `FlagInfoReader`) は同期 `sqlite3` を使うため、イベントループを塞がないよう `loop.run_in_executor()` 経由で呼ぶ ([ArtifactSpoiler.py:251-254](ArtifactSpoiler.py#L251-L254))。読み出し側は `aiosqlite` を使う。
 
 ### アーティファクトのフラグ表示
 
