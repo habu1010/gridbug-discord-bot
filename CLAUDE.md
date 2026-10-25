@@ -79,7 +79,7 @@ extensions:
 
 ### 拡張のロードと設定の受け渡し
 
-[bot.py](bot.py) は `extensions` の各エントリについて **`self.ext = ext` を代入した直後に `load_extension()` を呼ぶ**。各モジュールの `setup(bot)` は `bot.ext` を読んで自分の設定辞書を取得する ([MonsterSpoiler.py:92-93](MonsterSpoiler.py#L92-L93) など)。つまり `bot.ext` は「今ロード中の拡張の設定」を指す一時的な受け渡し用の属性であり、`setup()` の中でしか有効でない。新しいCogを追加する際もこの流儀に従うこと。
+[bot.py](bot.py) は `extensions` の各エントリについて **`self.ext = ext` を代入した直後に `load_extension()` を呼ぶ**。各モジュールの `setup(bot)` は `bot.ext` を読んで自分の設定辞書を取得する ([MonsterSpoiler.py:92-93](MonsterSpoiler.py#L92-L93) など)。つまり `bot.ext` は「今ロード中の拡張の設定」を指す一時的な受け渡し用の属性であり、`setup()` の中でしか有効でない。新しいCogを追加する際もこの流儀に従うこと。読み込めない拡張 (設定に残った削除済みの拡張名、`setup()` での例外、設定の書き間違いなど) は、エラーログに残して残りの拡張の読み込みを続ける。
 
 ### 情報取得のパイプライン
 
