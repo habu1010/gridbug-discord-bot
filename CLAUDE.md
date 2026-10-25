@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-ローグライクゲーム「変愚蛮怒(hengband)」のDiscordギルド向けbot。discord.py製で、変愚蛮怒公式リポジトリの定義ファイル/スポイラーを定期的に取得してSQLiteにキャッシュし、モンスターやアーティファクトの情報検索コマンドを提供する。他にRSS通知、ソース表示、翻訳、ダイスロール機能がある。
+ローグライクゲーム「変愚蛮怒(hengband)」のDiscordギルド向けbot。discord.py製で、変愚蛮怒公式リポジトリの定義ファイル/スポイラーを定期的に取得してSQLiteにキャッシュし、モンスターやアーティファクトの情報検索コマンドを提供する。他にRSS通知、ソース表示、ダイスロール機能がある。
 
 ## 開発コマンド
 
